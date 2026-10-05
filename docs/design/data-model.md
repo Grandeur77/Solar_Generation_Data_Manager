@@ -7,7 +7,7 @@
 **API Documentation:** OpenAPI 3 (Swagger UI)  
 **Hosting:** Render (HTTPS)  
 **Design Authority:** REST API Design Guidelines (WSO2 design spine, step 1: data model)  
-**Model Independence:** The stack above is where this model will be implemented (from Step 1.5). The model in this document is deliberately implementation-independent, with no collections, data types, keys or JSON.
+**Model Independence:** The stack above is where this model will be implemented. The model in this document is deliberately implementation-independent, with no collections, data types, keys or JSON.
 
 ## 1. Domain hierarchy
 
@@ -34,25 +34,55 @@ erDiagram
 
     Province {
         identifier province_id
+        attribute name
     }
     District {
         identifier district_id
+        reference province_id
+        attribute name
     }
     GridSubstation {
         identifier substation_id
+        reference district_id
+        attribute name
     }
     SolarInstallation {
         identifier installation_id
+        reference substation_id
+        attribute meter_id
+        attribute name
+        attribute capacity_kw
+        attribute status
+        attribute commissioned_at
+        attribute address
+        attribute latitude
+        attribute longitude
     }
     GenerationReading {
         identifier reading_id
+        reference installation_id
+        attribute timestamp
+        attribute power_kw
+        attribute energy_kwh
+        attribute voltage
+        attribute received_at
+        reference substation_id
+        reference district_id
+        reference province_id
     }
     User {
         identifier user_id
+        attribute name
+        attribute email
+        attribute role
+        attribute jurisdiction_level
+        reference province_id
+        reference district_id
+        attribute status
     }
 ```
 
-Notation key: `||` exactly one, `|o` zero or one, `|{` one or more, `o{` zero or more; "identifier" fills Mermaid's required type slot and is not a data type.
+Notation key: `||` exactly one, `|o` zero or one, `|{` one or more, `o{` zero or more. The words "identifier" (the entity's own identity), "reference" (the identity of a related entity) and "attribute" (a plain property) fill Mermaid's required type slot and are not data types.
 
 ## 3. Relationships
 
@@ -138,7 +168,86 @@ flowchart TD
     class N1,N2 note
 ```
 
-## 4. Write-read split
+## 4. Attributes
+
+All names are snake_case. Units are part of the name where a value has one (`_kw`, `_kwh`), and `_at` marks a point in time. The brief sets a minimum only for GenerationReading, so every other attribute has a one-line justification.
+
+### Province
+
+| Attribute | Meaning | Why it is here |
+|---|---|---|
+| `province_id` | Identity of the province | Every entity needs its own identity. |
+| `name` | Official province name, e.g. Western | Lets users recognise the jurisdiction without decoding an id. |
+
+### District
+
+| Attribute | Meaning | Why it is here |
+|---|---|---|
+| `district_id` | Identity of the district | Every entity needs its own identity. |
+| `province_id` | The province the district belongs to | Records R1, so every district can be traced to its province. |
+| `name` | Official district name, e.g. Colombo | Lets users recognise the jurisdiction without decoding an id. |
+
+### GridSubstation
+
+| Attribute | Meaning | Why it is here |
+|---|---|---|
+| `substation_id` | Identity of the substation | Every entity needs its own identity. |
+| `district_id` | The district the substation is located in | Records R2, so every substation can be traced to its district. |
+| `name` | Name of the grid node | Operators know substations by name, not by id. |
+
+### SolarInstallation
+
+| Attribute | Meaning | Why it is here |
+|---|---|---|
+| `installation_id` | Identity of the rooftop site | Every entity needs its own identity; devices authenticate as this installation. |
+| `substation_id` | The substation the site feeds into | Records R3, so every site can be traced up to its district and province. |
+| `meter_id` | Identifier of the site's smart meter or inverter | The device is an attribute of the site, not an entity (D1), and it is how a device is recognised when it reports. |
+| `name` | Human-readable site label | Lets analysts tell sites apart on a dashboard. |
+| `capacity_kw` | Rated panel capacity in kW | Shows how much of its possible output a site is producing, and lets summaries report total capacity. |
+| `status` | `active` or `inactive` | A decommissioned site can be marked inactive instead of deleted, so its readings keep a valid owner (D7). |
+| `commissioned_at` | When the site started generating | Explains why a site has no readings before that point, and lets analysts compare new and old sites. |
+| `address` | Street address of the site | Lets field staff locate the site. |
+| `latitude`, `longitude` | Geographic position of the site | Allows the site to be placed on a map, which a dashboard needs and an address alone can't do. |
+
+### GenerationReading
+
+| Attribute | Meaning | Why it is here |
+|---|---|---|
+| `reading_id` | Identity of the reading | A single reading must be referable on its own, for example after it has just been recorded. |
+| `installation_id` | The installation that produced the reading | Brief minimum (the owning installation); records R4. |
+| `timestamp` | When the device took the measurement | Brief minimum. |
+| `power_kw` | Instantaneous power output in kW at `timestamp` | Brief minimum. |
+| `energy_kwh` | Cumulative energy in kWh since the meter started; it never decreases | Brief minimum. Energy in a period is the difference between two readings, so a missed reading loses no energy. |
+| `voltage` | Grid voltage at the site in volts at `timestamp` | Brief minimum. |
+| `received_at` | When the system received the reading | Separates device time from arrival time, so delayed or resent readings can be spotted and a wrong device clock doesn't go unnoticed. |
+| `substation_id` | The installation's substation when the reading was recorded | Copied from the installation so "readings on this substation" needs no lookup through the installation. |
+| `district_id` | The installation's district when the reading was recorded | Copied so a district user's read scope and the district generation summary can be applied directly to readings. |
+| `province_id` | The installation's province when the reading was recorded | Copied so a province user's read scope can be applied directly to readings. |
+
+The three copied ids are safe because a reading is never changed (D7). If a site is later reconnected to another substation, its old readings keep the location they were actually recorded under, which is the correct history.
+
+### User
+
+| Attribute | Meaning | Why it is here |
+|---|---|---|
+| `user_id` | Identity of the SLSEA user | Every entity needs its own identity. |
+| `name` | The person's name | Shows who an account belongs to. |
+| `email` | The person's work email | A unique, familiar way for the person to identify themselves when signing in. |
+| `role` | What the user is allowed to do, e.g. analyst or registry admin | The brief's User has a role, and read access and registry maintenance are different permissions. |
+| `jurisdiction_level` | `national`, `province` or `district` | States the user's single jurisdiction explicitly (D4). |
+| `province_id` | The province a province-level user is scoped to | Records R5; present only when `jurisdiction_level` is `province`. |
+| `district_id` | The district a district-level user is scoped to | Records R6; present only when `jurisdiction_level` is `district`. |
+| `status` | `active` or `inactive` | Access can be withdrawn without deleting the person's record. |
+
+### Considered and left out
+
+| Attribute | Why it is left out |
+|---|---|
+| `peak_power_kw`, `min_power_kw` on GenerationReading | Each reading is a snapshot. Peaks and dips between snapshots are not captured, and this is stated as a limitation in the critical evaluation. |
+| Last-value fields such as `last_power_kw` on SolarInstallation | "Current" comes from the latest reading (D2). |
+| Device secrets and password storage | How credentials are stored is an implementation and security decision, so it is added in the security phase, not in this model. |
+
+## 5. Write-read split
 
 ```mermaid
 flowchart LR
@@ -178,7 +287,7 @@ flowchart LR
 - **Read path.** National, provincial and district users read data scoped by their jurisdiction, and never write generation readings.
 - At model level, there is no relationship between User and GenerationReading and no Device entity, so neither path appears in the other (D5).
 
-## 5. Core architectural decisions
+## 6. Core architectural decisions
 
 ### D1. The meter id is an attribute, not a Device entity
 
@@ -262,7 +371,7 @@ flowchart LR
 | D6 | Province → District is 1..\*; the other levels are 0..\* |
 | D7 | Readings are never updated or deleted |
 
-## 6. Deliberately excluded
+## 7. Deliberately excluded
 
 | Excluded | Why it is excluded | Common mistake it avoids |
 |---|---|---|
