@@ -7,7 +7,7 @@
 **API Documentation:** OpenAPI 3 (Swagger UI)  
 **Hosting:** Render (HTTPS)  
 **Design Authority:** REST API Design Guidelines (WSO2 design spine, step 1: data model)  
-**Model Independence:** The stack above is where this model will be implemented. The model in this document is deliberately implementation-independent, with no collections, data types, keys or JSON.
+**Model Independence:** The stack above is where this model will be implemented. Sections 1–7 are deliberately implementation-independent, with no collections, data types, keys or JSON. Only section 8 maps the model to MongoDB.
 
 ## 1. Domain hierarchy
 
@@ -86,7 +86,7 @@ Notation key: `||` exactly one, `|o` zero or one, `|{` one or more, `o{` zero or
 
 ## 3. Relationships
 
-Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for explaining the model. They are not an identifier format; that is decided in Step 1.5.
+Sample ids (PV-01, DT-01, SS-001, INS-0001, USR-001) follow the formats chosen in section 8. Readings get generated ids, so the examples refer to them by their time.
 
 ### R1. Province contains District
 
@@ -104,7 +104,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 | Cardinality | District → GridSubstation: **1 to 0..\***. GridSubstation → District: **exactly 1**. |
 | In plain English | A district contains zero or more grid substations, and every substation is located in exactly one district. |
 | Why | A substation is a physical grid node in one place. Zero is allowed because the model should not assume every district already has a registered substation (D6). The seed data still gives every district at least one. |
-| Instance | DT-01 has GS-01. GS-01 is located only in DT-01. |
+| Instance | DT-01 has SS-001. SS-001 is located only in DT-01. |
 
 ### R3. GridSubstation connects SolarInstallation
 
@@ -113,7 +113,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 | Cardinality | GridSubstation → SolarInstallation: **1 to 0..\***. SolarInstallation → GridSubstation: **exactly 1**. |
 | In plain English | A substation connects zero or more installations, and every installation feeds the grid through exactly one substation. |
 | Why | A rooftop site has one grid connection point. A newly commissioned substation may have no sites connected yet (D6). |
-| Instance | GS-01 connects SI-0001 and SI-0002. SI-0001 connects only to GS-01. |
+| Instance | SS-001 connects INS-0001 and INS-0002. INS-0001 connects only to SS-001. |
 
 ### R4. SolarInstallation records GenerationReading
 
@@ -122,7 +122,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 | Cardinality | SolarInstallation → GenerationReading: **1 to 0..\***. GenerationReading → SolarInstallation: **exactly 1**. |
 | In plain English | An installation records zero or more readings over time, and every reading belongs to exactly one installation. |
 | Why | A reading means nothing without the site that produced it. A site that has just been registered has no readings yet, so zero must be valid (D2, D6). |
-| Instance | SI-0001 has R-1, R-2 and R-3, one per reporting interval. SI-0002 has no readings yet. |
+| Instance | INS-0001 has readings at 06:00, 06:15 and 06:30, one per reporting interval. INS-0002 has no readings yet. |
 
 ### R5. Province scopes User
 
@@ -131,7 +131,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 | Cardinality | Province → User: **1 to 0..\***. User → Province: **0 or 1**. |
 | In plain English | A province may be the read scope of any number of users, and a user is scoped to at most one province. |
 | Why | Province-level SLSEA users read only their own province. District and national users have no province link, so the user side is optional (D4). |
-| Instance | U-01, a province user, is scoped to PV-01 and can read DT-01, DT-02 and everything under them. |
+| Instance | USR-001, a province user, is scoped to PV-01 and can read DT-01, DT-02 and everything under them. |
 
 ### R6. District scopes User
 
@@ -140,7 +140,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 | Cardinality | District → User: **1 to 0..\***. User → District: **0 or 1**. |
 | In plain English | A district may be the read scope of any number of users, and a user is scoped to at most one district. |
 | Why | District-level SLSEA users read only their own district. Province and national users have no district link (D4). |
-| Instance | U-02, a district user, is scoped to DT-01 and can read GS-01, SI-0001, SI-0002 and their readings, but nothing in DT-02. |
+| Instance | USR-002, a district user, is scoped to DT-01 and can read SS-001, INS-0001, INS-0002 and their readings, but nothing in DT-02. |
 
 **Jurisdiction rule (model constraint).** Every user has exactly **one** jurisdiction. National: no R5 or R6 link. Province: one R5 link and no R6 link. District: one R6 link and no R5 link. Crow's-foot notation cannot express "at most one of these two links", so the rule is stated here (D4).
 
@@ -152,17 +152,17 @@ One slice of the data, using the sample ids above. The ids are labels only.
 flowchart TD
     PV01["PV-01 Western Province"] -->|"contains"| DT01["DT-01 Colombo"]
     PV01 -->|"contains"| DT02["DT-02 Gampaha"]
-    DT01 -->|"contains"| GS01["GS-01 substation"]
-    GS01 -->|"connects"| SI01["SI-0001 installation"]
-    GS01 -->|"connects"| SI02["SI-0002 installation"]
-    SI01 -->|"records"| R1["R-1 reading"]
-    SI01 -->|"records"| R2["R-2 reading"]
-    SI01 -->|"records"| R3["R-3 reading"]
+    DT01 -->|"contains"| SS001["SS-001 substation"]
+    SS001 -->|"connects"| INS01["INS-0001 installation"]
+    SS001 -->|"connects"| INS02["INS-0002 installation"]
+    INS01 -->|"records"| R1["Reading at 06:00"]
+    INS01 -->|"records"| R2["Reading at 06:15"]
+    INS01 -->|"records"| R3["Reading at 06:30"]
 
     N1["Not shown in this slice:<br/>the substations of DT-02"]
     N2["No readings yet:<br/>valid because R4 is 0 to many"]
     DT02 -.- N1
-    SI02 -.- N2
+    INS02 -.- N2
 
     classDef note fill:#f5f5f5,stroke:#888888,stroke-dasharray:4 4,color:#333333
     class N1,N2 note
@@ -252,7 +252,7 @@ The three copied ids are safe because a reading is never changed (D7). If a site
 ```mermaid
 flowchart LR
     subgraph WRITE["Write-client"]
-        M(["Meter or inverter of SI-0001"])
+        M(["Meter or inverter of INS-0001"])
     end
 
     subgraph MODEL["Domain model"]
@@ -266,7 +266,7 @@ flowchart LR
         UD["District user"]
     end
 
-    M ==>|"writes readings for SI-0001 only"| R
+    M ==>|"writes readings for INS-0001 only"| R
 
     UN -->|"reads everything"| H
     UN -->|"reads everything"| R
@@ -337,7 +337,7 @@ What the table shows:
 | Context | The brief's hierarchy has five levels, and the brief requires filtering by substation as well as province and district. |
 | Alternatives considered | (a) A substation name stored as an attribute of SolarInstallation. (b) Installations linked straight to District. |
 | Why this choice | A substation has its own identity and is shared by many installations, so it is a thing in the domain, not a property of one site. Without the level, "all sites on this grid node" can't be expressed. |
-| Consequence / trade-off | One more hop between a reading and its district. How district and province queries avoid walking every level is decided in Steps 1.2 and 1.5. |
+| Consequence / trade-off | One more hop between a reading and its district. District and province queries avoid walking every level because readings carry copies of the jurisdiction ids (section 4) and those copies are indexed (section 8). |
 
 ### D4. A user has exactly one jurisdiction, with no Jurisdiction entity
 
@@ -377,7 +377,7 @@ What the table shows:
 | Context | Readings are measurements reported by the device at a point in time. |
 | Alternatives considered | (a) Allow corrections by editing a reading. (b) Delete readings when their installation is removed. |
 | Why this choice | The readings are SLSEA's evidence of what was generated. Editing or deleting them would make the history untrustworthy. |
-| Consequence / trade-off | A faulty reading cannot be fixed in place. Removing an installation keeps its readings as history. How duplicate readings are rejected is decided in Step 1.5. |
+| Consequence / trade-off | A faulty reading cannot be fixed in place. Removing an installation keeps its readings as history. Duplicate readings are rejected by a unique index (section 8). |
 
 ### Decision summary
 
@@ -400,3 +400,105 @@ What the table shows:
 | Collection entities (e.g. "Installations") | A collection is a resource derived later from client needs, not a thing in the domain. | Putting API collections into the data model |
 | User–GenerationReading relationship | Users are read-clients and never produce readings (D5). | Treating the user as the data producer |
 | Format names in the model (e.g. `json_payload`) | The model is implementation-independent; formats are decided at the representation step. | Baking format names into the data model |
+
+---
+
+## 8. Implementation mapping (MongoDB)
+
+> **This section is implementation, not model.** Sections 1–7 describe the domain without any technology. This section records how that model is stored in MongoDB Atlas through Mongoose. If the database changed, only this section would change.
+
+### 8.1 Collections
+
+| Entity | Collection | Fields stored |
+|---|---|---|
+| Province | `provinces` | `_id`, `name` |
+| District | `districts` | `_id`, `province_id`, `name` |
+| GridSubstation | `grid_substations` | `_id`, `district_id`, `name` |
+| SolarInstallation | `installations` | `_id`, `substation_id`, `district_id`, `province_id`, `meter_id`, `name`, `capacity_kw`, `status`, `commissioned_at`, `address`, `latitude`, `longitude`, `created_at`, `updated_at` |
+| GenerationReading | `generation_readings` | `_id`, `installation_id`, `timestamp`, `power_kw`, `energy_kwh`, `voltage`, `received_at`, `substation_id`, `district_id`, `province_id` |
+| User | `users` | `_id`, `name`, `email`, `role`, `jurisdiction_level`, `province_id`, `district_id`, `status`, `created_at`, `updated_at` |
+
+- **One collection per entity.** Each level of the hierarchy is stored and queried on its own, not nested inside its parent.
+- **Collection names are set explicitly.** Mongoose would otherwise derive names such as `gridsubstations`.
+- **`_id` holds the readable id** (8.2). It is shown to clients as the entity's own id field (`province_id`, `installation_id`, and so on).
+- **`created_at` and `updated_at` exist only on collections that can change.** They will feed the Last-Modified header. Readings never change (D7), so `received_at` plays that role for them.
+- **Installations also store `district_id` and `province_id`.** These aren't attributes in the model; they are copies taken from the installation's substation. With them, installations can be filtered and scope-checked by district or province without loading the substation first. Unlike readings, an installation can be replaced, so the copies are recalculated from the substation whenever `substation_id` is set.
+- **Credential fields are added in the security phase:** a device secret hash on installations and a password hash on users.
+
+### 8.2 Identifiers
+
+| Entity | Format | Example | Seed range |
+|---|---|---|---|
+| Province | `PV-` + 2 digits | `PV-01` | `PV-01` to `PV-09` |
+| District | `DT-` + 2 digits | `DT-01` | `DT-01` to `DT-25` |
+| GridSubstation | `SS-` + 3 digits | `SS-001` | at least one per district |
+| SolarInstallation | `INS-` + 4 digits | `INS-0001` | about `INS-0001` to `INS-0220` |
+| User | `USR-` + 3 digits | `USR-001` | one or more per role and level |
+| GenerationReading | generated 24-character hex string | `66f2c1a9e4b0a1b2c3d4e5f6` | about 167,000 |
+| `meter_id` (an attribute, not an `_id`) | `MTR-` + 6 digits | `MTR-000001` | one per installation |
+
+- **Readable codes are used for everything people refer to.** Analysts, admins and markers read and type these ids, they appear in URIs, and a seed file full of `DT-01` can be checked by eye.
+- **Readings get generated ids.** Devices create them at volume and nobody types them. A running counter would need coordinating between concurrent device writes, and a generated id needs no coordination.
+- **Every `_id` is stored as a string, including reading ids.** An unknown or badly formed id is then simply "not found", not a conversion error.
+- **There is room to grow.** Four digits allow 9,999 installations. Because ids are strings, a longer form such as `INS-10000` can be added later without changing anything, although sorting by id would then stop matching numeric order.
+
+### 8.3 Parent references
+
+| Child collection | Reference field | Points to |
+|---|---|---|
+| `districts` | `province_id` | `provinces._id` |
+| `grid_substations` | `district_id` | `districts._id` |
+| `installations` | `substation_id` | `grid_substations._id` |
+| `generation_readings` | `installation_id` | `installations._id` |
+| `users` | `province_id` or `district_id` | `provinces._id` or `districts._id` |
+
+- **Each child stores its parent's readable id.** Most reads can show the parent id without a lookup.
+- **MongoDB has no foreign keys, so integrity is enforced in code.** The service layer checks that the parent exists before it creates or replaces a child. The seed script checks every reference before inserting anything. This is a known limitation of the storage choice.
+- **The jurisdiction rule (D4) is enforced by validation on `users`.** `national` has neither `province_id` nor `district_id`. `province` has only `province_id`. `district` has only `district_id`.
+
+### 8.4 Denormalised jurisdiction ids on readings
+
+- **Set by the server when the reading is stored.** `substation_id`, `district_id` and `province_id` are copied from the installation document, never taken from the device's request. A device therefore can't place its readings in the wrong district.
+- **Never updated.** Readings never change (D7), so the copies can't drift out of step. If an installation is later reconnected elsewhere, its old readings keep the location they were recorded under.
+- **Used by the district generation summary and by jurisdiction checks.** Both can match on `district_id` directly, without joining readings to installations, substations and districts.
+- **The cost is small.** Three short strings per reading add roughly 10 MB across the seed's 167,000 readings, well inside the Atlas M0 limit of 512 MB.
+
+### 8.5 Indexes
+
+| Collection | Index | Unique | What it serves |
+|---|---|---|---|
+| `generation_readings` | `{ installation_id: 1, timestamp: -1 }` | **Yes** | Rejects a second reading for the same installation and time (for example a device retry). Also finds the latest reading, and pages, sorts and time-filters one installation's history. |
+| `generation_readings` | `{ district_id: 1, timestamp: -1 }` | No | District generation summary and district-scoped reading queries. |
+| `installations` | `{ meter_id: 1 }` | **Yes** | One meter per installation; finds the installation when a device signs in. |
+| `installations` | `{ substation_id: 1 }`, `{ district_id: 1 }`, `{ province_id: 1 }` | No | Filtering installations by substation, district or province, and jurisdiction scope. |
+| `grid_substations` | `{ district_id: 1 }` | No | Filtering substations by district. |
+| `districts` | `{ province_id: 1 }` | No | Filtering districts by province. |
+| `users` | `{ email: 1 }` | **Yes** | One account per email; finds the user at sign-in. |
+
+- **Every `_id` is unique automatically**, so no index is declared for it.
+- **`timestamp: -1` stores newest first**, which matches the most common read. MongoDB can walk the same index backwards for oldest-first.
+- **`substation_id` and `province_id` on readings are stored but not indexed.** No planned query needs them yet. Every index slows each write, and readings are written about 96 times a day per installation, so an index is added only when a query needs it.
+
+### 8.6 Why readings are not embedded in the installation
+
+- **The array would grow without limit.** An installation adds 96 readings a day, every day. MongoDB caps a document at 16 MB, which at roughly 200 bytes per reading is reached in about two to three years, and the document gets slow to load long before that.
+- **Every read of an installation would load its whole history**, and every new reading would rewrite a growing document.
+- **Readings need their own identity and their own queries.** A newly created reading needs an id the client can use, and history needs paging, time-window filtering, sorting and district-wide totals. All of that is natural on a collection and awkward on an array.
+- **The "one reading per installation per time" rule couldn't be enforced.** A unique index prevents duplicates across documents, not inside one document's array.
+- **It is a short step from an embedded array to last-value fields on the installation**, the mistake D2 rules out.
+
+### 8.7 Why readings are not a MongoDB time-series collection
+
+- **Time-series collections are built for this shape of data.** They bucket readings by time and source, compress them and scan time ranges quickly. That is a real advantage, and it is named as a trade-off.
+- **But they can't have a unique index.** Without the unique `{ installation_id, timestamp }` index, a device that retries after a network failure would store the same reading twice, and the duplicates would show up in history pages and counts.
+- **Their limits on changing and deleting data are not a reason against them**, since readings are append-only anyway (D7).
+- **At this scale an ordinary collection is fast enough.** For about 167,000 readings, an ordinary collection with the compound index serves every planned query. The compression benefit matters only at national scale, which goes into the critical evaluation as a limitation.
+
+### 8.8 Storage alternatives
+
+| Option | What it would look like | What it would gain | Why it was not chosen |
+|---|---|---|---|
+| Readings embedded in the installation | A `readings` array inside each installation document | One read returns a site and its history | 16 MB document limit, no per-reading identity, no unique rule per installation and time, and it invites last-value fields (8.6). |
+| MongoDB time-series collection | `generation_readings` created as a time-series collection keyed on `timestamp` and `installation_id` | Compression, time bucketing and fast range scans | No unique index, so device retries create duplicate readings (8.7). |
+| Relational database (e.g. PostgreSQL) | One table per entity with real foreign keys and a unique constraint on installation and time | Referential integrity enforced by the database, plus SQL joins and aggregation | The project's chosen stack is MongoDB on Atlas's free tier, and documents map directly to the JSON representations. The cost is that integrity is enforced in code and by the seed check (8.3), which is stated as a limitation. |
+| **Chosen:** ordinary collection with a unique compound index | `generation_readings` as a normal collection, one document per reading | Unique rule enforced by the database, every planned query indexed, simple to explain | Weaker compression than a time-series collection at national scale. |
