@@ -6,33 +6,20 @@
 **Authentication:** JWT bearer tokens with scopes  
 **API Documentation:** OpenAPI 3 (Swagger UI)  
 **Hosting:** Render (HTTPS)  
-**Design Authority:** REST API Design Guidelines (WSO2 design spine, step 1: §3)  
-**Model Independence:** The stack above is where this model will be implemented (from Step 1.5). The model in this document is deliberately implementation-independent (Brief §3), with no collections, data types, keys or JSON.
+**Design Authority:** REST API Design Guidelines (WSO2 design spine, step 1: data model)  
+**Model Independence:** The stack above is where this model will be implemented (from Step 1.5). The model in this document is deliberately implementation-independent, with no collections, data types, keys or JSON.
 
 ## 1. Domain hierarchy
 
 ```mermaid
 flowchart TD
-    P["Province"] -->|"1 to many"| D["District"]
-    D -->|"1 to many"| G["GridSubstation"]
-    G -->|"1 to many"| S["SolarInstallation"]
-    S -->|"1 to many"| R["GenerationReading"]
-
-    U["User<br/>national user = no scope link"] -.->|"read scope: province user"| P
-    U -.->|"read scope: district user"| D
-
-    M(["Meter or inverter<br/>external write-client<br/>NOT an entity"]) ==>|"writes readings for its own installation"| R
-
-    classDef entity fill:#e8f1fb,stroke:#1f4e79,color:#000000
-    classDef actor fill:#fff4e5,stroke:#b35900,stroke-dasharray:6 4,color:#000000
-    class P,D,G,S,R,U entity
-    class M actor
+    P["Province"] -->|"has many"| D["District"]
+    D -->|"has many"| G["GridSubstation"]
+    G -->|"has many"| S["SolarInstallation"]
+    S -->|"has many"| R["GenerationReading"]
 ```
 
-How to read it:
-- Solid boxes are entities. The solid arrows are the five-level geographic-and-asset hierarchy from Brief §3.
-- Dashed arrows are **read scope**, not ownership. A user is linked to at most one province or one district; a national user has no link and can read the whole hierarchy.
-- The rounded, dashed-border box is the meter or inverter. It is an **actor outside the model**, not an entity (decision D1). Its identifier becomes an attribute of SolarInstallation in Step 1.2.
+Each level has many of the level below it, and every child belongs to exactly one parent. User (read scope) is shown in the ER diagram, and the meter or inverter (an external write-client, not an entity) is shown in the write-read split.
 
 ## 2. ER diagram
 
@@ -77,7 +64,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 |---|---|
 | Cardinality | Province → District: **1 to 1..\***. District → Province: **exactly 1**. |
 | In plain English | A province contains one or more districts, and every district belongs to exactly one province. |
-| Why | Sri Lanka's 9 provinces are each made up of districts (25 in total, Brief §4). A province with no districts is not a real province, and a district cannot sit in two provinces. See D6. |
+| Why | Sri Lanka's 9 provinces are each made up of districts (25 in total). A province with no districts is not a real province, and a district cannot sit in two provinces. See D6. |
 | Instance | PV-01 (Western) has DT-01 (Colombo) and DT-02 (Gampaha). DT-01 belongs only to PV-01. |
 
 ### R2. District contains GridSubstation
@@ -113,7 +100,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 |---|---|
 | Cardinality | Province → User: **1 to 0..\***. User → Province: **0 or 1**. |
 | In plain English | A province may be the read scope of any number of users, and a user is scoped to at most one province. |
-| Why | Province-level SLSEA users read only their own province (Brief §2). District and national users have no province link, so the user side is optional (D4). |
+| Why | Province-level SLSEA users read only their own province. District and national users have no province link, so the user side is optional (D4). |
 | Instance | U-01, a province user, is scoped to PV-01 and can read DT-01, DT-02 and everything under them. |
 
 ### R6. District scopes User
@@ -122,7 +109,7 @@ Sample ids (PV-01, DT-01, GS-01, SI-0001, R-1, U-01) are illustrative labels for
 |---|---|
 | Cardinality | District → User: **1 to 0..\***. User → District: **0 or 1**. |
 | In plain English | A district may be the read scope of any number of users, and a user is scoped to at most one district. |
-| Why | District-level SLSEA users read only their own district (Brief §2). Province and national users have no district link (D4). |
+| Why | District-level SLSEA users read only their own district. Province and national users have no district link (D4). |
 | Instance | U-02, a district user, is scoped to DT-01 and can read GS-01, SI-0001, SI-0002 and their readings, but nothing in DT-02. |
 
 **Jurisdiction rule (model constraint).** Every user has exactly **one** jurisdiction. National: no R5 or R6 link. Province: one R5 link and no R6 link. District: one R6 link and no R5 link. Crow's-foot notation cannot express "at most one of these two links", so the rule is stated here (D4).
@@ -187,8 +174,8 @@ flowchart LR
     class X note
 ```
 
-- **Write path (Brief §2).** A device authenticates as its installation and pushes readings for that installation only. "It can write nothing else." Giving it no read path is our design choice, which the security phase enforces.
-- **Read path (Brief §2).** National, provincial and district users read data scoped by their jurisdiction. "They never write generation readings."
+- **Write path.** A device authenticates as its installation and pushes readings for that installation only, and can write nothing else. Giving it no read path is our design choice, which the security phase enforces.
+- **Read path.** National, provincial and district users read data scoped by their jurisdiction, and never write generation readings.
 - At model level, there is no relationship between User and GenerationReading and no Device entity, so neither path appears in the other (D5).
 
 ## 5. Core architectural decisions
@@ -198,10 +185,9 @@ flowchart LR
 | | |
 |---|---|
 | Decision | The meter or inverter identifier (`meter_id`) is an attribute of SolarInstallation. There is no Device entity. |
-| Context | Each installation has one smart meter or inverter that pushes its readings (Brief §2). |
+| Context | Each installation has one smart meter or inverter that pushes its readings. |
 | Alternatives considered | (a) A Device entity with a 1:1 link to SolarInstallation. (b) A Device entity that owns the readings. |
 | Why this choice | The device has no identity or life of its own in this domain: it exists only to report for the one site it is fitted to. A separate entity would add a 1:1 relationship that carries no information. |
-| Brief / guideline | Brief §3: "It is not a separate Device entity. Introducing a needless Device entity is a modelling flaw." Guidelines §3 (S1); Mistake #1. |
 | Consequence / trade-off | Swapping a meter means changing an attribute of the installation, so meter history is not modelled. That is acceptable because SLSEA's questions are about sites and generation, not hardware. |
 
 ### D2. GenerationReading is its own append-only time series
@@ -209,10 +195,9 @@ flowchart LR
 | | |
 |---|---|
 | Decision | Every reading is its own GenerationReading, linked to one installation. The installation holds no last-value fields. |
-| Context | Devices report at a fixed interval (15 minutes in our seed, Brief §4). SLSEA needs both "what is generating now" and historical analysis. |
+| Context | Devices report at a fixed interval (15 minutes in our seed). SLSEA needs both "what is generating now" and historical analysis. |
 | Alternatives considered | (a) Last-value fields such as `last_power` on SolarInstallation. (b) Both last-value fields and a history. |
 | Why this choice | Last-value fields overwrite the past, so the analytical questions cannot be answered. "Current" is derived later from the latest reading (the composite and last-known-reading resources), so nothing is stored twice. |
-| Brief / guideline | Brief §3: storing only `last_power` "destroys the historical (analytical) capability and is the single most common modelling mistake here." Guidelines §3, §4.3; Mistake #2. |
 | Consequence / trade-off | Readings are by far the largest part of the data (about 167,000 for 8 days of seed), so later steps need pagination and an efficient way to find the latest reading. |
 
 ### D3. GridSubstation is its own level between District and SolarInstallation
@@ -223,7 +208,6 @@ flowchart LR
 | Context | The brief's hierarchy has five levels, and the brief requires filtering by substation as well as province and district. |
 | Alternatives considered | (a) A substation name stored as an attribute of SolarInstallation. (b) Installations linked straight to District. |
 | Why this choice | A substation has its own identity and is shared by many installations, so it is a thing in the domain, not a property of one site. Without the level, "all sites on this grid node" can't be expressed. |
-| Brief / guideline | Brief §3 (Grid Substation: "the grid node installations connect to"); Brief §5 (filtering by province, district and substation). Guidelines §3 (S1). |
 | Consequence / trade-off | One more hop between a reading and its district. How district and province queries avoid walking every level is decided in Steps 1.2 and 1.5. |
 
 ### D4. A user has exactly one jurisdiction, with no Jurisdiction entity
@@ -231,10 +215,9 @@ flowchart LR
 | | |
 |---|---|
 | Decision | Every user is national, or linked to one province, or linked to one district. There is no separate Jurisdiction entity. |
-| Context | Brief §3 describes User as "an SLSEA person with a role and a jurisdiction", singular. |
+| Context | A user is an SLSEA person with a role and a single jurisdiction. |
 | Alternatives considered | (a) A Jurisdiction entity that users point to. (b) A many-to-many link so one user can cover several districts. |
 | Why this choice | Province and District already are the jurisdictions, so a Jurisdiction entity would duplicate them. One scope per user keeps the read rule simple to state, enforce and test. |
-| Brief / guideline | Brief §2 (users read "scoped by their jurisdiction"), Brief §3; S1 (User is a reader with a role and a jurisdiction). |
 | Consequence / trade-off | "Exactly one of these" is a rule that crow's-foot notation can't draw, so it is stated in text and must be enforced later. A user who covers two districts needs a broader scope or two accounts. This is a known limitation. |
 
 ### D5. Write and read are separated at model level
@@ -245,7 +228,6 @@ flowchart LR
 | Context | The brief has two different kinds of client, with different permissions. |
 | Alternatives considered | (a) User "produces" or "owns" readings, like a person logging their own output. (b) Devices modelled as a kind of User. |
 | Why this choice | The data producer and the data consumer are different parties. If the model linked users to readings, the security model would have nothing to enforce the split against. |
-| Brief / guideline | Brief §2: "This is not a system where a person logs their own solar output … This split drives your entire security model." S1 (User is never the data producer); Mistake #4. |
 | Consequence / trade-off | The registry administrator role used later for installation maintenance is still a User and still never writes readings. Device credentials have to be designed separately from user accounts in the security phase. |
 
 ### D6. Cardinality choices
@@ -256,7 +238,6 @@ flowchart LR
 | Context | The brief says only "has many" for each level, so the minimum is our decision. |
 | Alternatives considered | (a) 1..\* at every level. (b) 0..\* at every level. |
 | Why this choice | Provinces and districts are fixed real-world geography: every province has districts. The lower levels are registered over time, so a new district, substation or installation can exist before anything is attached to it. Our seed deliberately includes 2–3 installations with no readings to show this. |
-| Brief / guideline | Brief §3 (the hierarchy), Brief §4 (9 provinces, 25 districts); Guidelines §3 (S1). |
 | Consequence / trade-off | Later steps must treat "no children" as a normal, empty result, not as an error. |
 
 ### D7. Readings are never updated or deleted
@@ -267,27 +248,26 @@ flowchart LR
 | Context | Readings are measurements reported by the device at a point in time. |
 | Alternatives considered | (a) Allow corrections by editing a reading. (b) Delete readings when their installation is removed. |
 | Why this choice | The readings are SLSEA's evidence of what was generated. Editing or deleting them would make the history untrustworthy. |
-| Brief / guideline | Brief §3 ("append-only time series"); Mistake #32 (update or delete routes for readings) and Mistake #33 (deleting an installation cascades to its readings). |
 | Consequence / trade-off | A faulty reading cannot be fixed in place. Removing an installation keeps its readings as history. How duplicate readings are rejected is decided in Step 1.5. |
 
 ### Decision summary
 
-| # | Decision | Main reference |
-|---|---|---|
-| D1 | `meter_id` is an attribute of SolarInstallation; no Device entity | Brief §3; Mistake #1 |
-| D2 | GenerationReading is its own append-only time series; no last-value fields | Brief §3; Guidelines §4.3; Mistake #2 |
-| D3 | GridSubstation is its own level between District and SolarInstallation | Brief §3, §5 |
-| D4 | Each user has exactly one jurisdiction; no Jurisdiction entity | Brief §2, §3; S1 |
-| D5 | User never produces readings; the device is outside the model | Brief §2; S1; Mistake #4 |
-| D6 | Province → District is 1..\*; the other levels are 0..\* | Brief §3, §4 |
-| D7 | Readings are never updated or deleted | Brief §3; Mistakes #32, #33 |
+| # | Decision |
+|---|---|
+| D1 | `meter_id` is an attribute of SolarInstallation; no Device entity |
+| D2 | GenerationReading is its own append-only time series; no last-value fields |
+| D3 | GridSubstation is its own level between District and SolarInstallation |
+| D4 | Each user has exactly one jurisdiction; no Jurisdiction entity |
+| D5 | User never produces readings; the device is outside the model |
+| D6 | Province → District is 1..\*; the other levels are 0..\* |
+| D7 | Readings are never updated or deleted |
 
 ## 6. Deliberately excluded
 
-| Excluded | Why it is excluded | Mistake it avoids |
+| Excluded | Why it is excluded | Common mistake it avoids |
 |---|---|---|
-| Device (Meter) entity | The device only reports for one site, so its id is an attribute (D1). | Mistake #1: separate Device/Meter entity (Guidelines §3) |
-| Last-value fields on SolarInstallation | They overwrite history; "current" is derived from the latest reading (D2). | Mistake #2: `last_power_kw` / last-value fields (Guidelines §3, §4.3) |
-| Collection entities (e.g. "Installations") | A collection is a resource derived later from client needs, not a thing in the domain. | Not in the catalogue. It follows Guidelines §3 (model first) and §4.2 (collections are derived from a catalogue or creation trigger). |
-| User–GenerationReading relationship | Users are read-clients and never produce readings (D5). | Mistake #4: User modelled as the data producer (write-read split) |
-| Format names in the model (e.g. `json_payload`) | The model is implementation-independent; formats are decided at the representation step. | Mistake #3: format names in the data model (Guidelines §3) |
+| Device (Meter) entity | The device only reports for one site, so its id is an attribute (D1). | Inventing a separate Device or Meter entity |
+| Last-value fields on SolarInstallation | They overwrite history; "current" is derived from the latest reading (D2). | Storing `last_power_kw`-style last-value fields instead of history |
+| Collection entities (e.g. "Installations") | A collection is a resource derived later from client needs, not a thing in the domain. | Putting API collections into the data model |
+| User–GenerationReading relationship | Users are read-clients and never produce readings (D5). | Treating the user as the data producer |
+| Format names in the model (e.g. `json_payload`) | The model is implementation-independent; formats are decided at the representation step. | Baking format names into the data model |
