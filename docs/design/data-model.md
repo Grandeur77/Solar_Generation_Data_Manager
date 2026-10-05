@@ -287,6 +287,26 @@ flowchart LR
 - **Read path.** National, provincial and district users read data scoped by their jurisdiction, and never write generation readings.
 - At model level, there is no relationship between User and GenerationReading and no Device entity, so neither path appears in the other (D5).
 
+### Client permissions
+
+"Own province" and "own district" mean the user's single jurisdiction (D4) and everything under it in the hierarchy.
+
+| Client | Province | District | GridSubstation | SolarInstallation | GenerationReading |
+|---|---|---|---|---|---|
+| Meter device | None | None | None | None | **Write:** add new readings for its own installation only. No read. |
+| National user | Read all | Read all | Read all | Read all | Read all |
+| Province user | Read own province | Read districts in own province | Read substations in own province | Read installations in own province | Read readings in own province |
+| District user | None | Read own district | Read substations in own district | Read installations in own district | Read readings in own district |
+| Registry admin | Read all | Read all | Read all | Read all; **write:** register, replace and remove installations | None |
+
+What the table shows:
+- **Exactly one client writes readings: the device, and only for its own installation.** It cannot read anything, including its own past readings.
+- **No client changes or removes a reading** (D7). Removing an installation leaves its readings in place as history.
+- **SLSEA users write nothing.** National, province and district users differ only in how much of the hierarchy they can read.
+- **The registry admin maintains installations but never touches readings.** It reads the hierarchy so it can attach a new installation to the right substation.
+- **Province, District and GridSubstation are written by no client.** They are fixed reference data loaded with the seed, so no client needs to change them.
+- **User accounts are not managed by any client.** They are created with the seed, so no client can grant itself a wider jurisdiction or role.
+
 ## 6. Core architectural decisions
 
 ### D1. The meter id is an attribute, not a Device entity
