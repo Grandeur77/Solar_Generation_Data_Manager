@@ -38,6 +38,8 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Operations
+    description: Service status for the hosting platform and monitoring
   - name: Hierarchy
     description: Provinces, districts and grid substations (read-only reference data)
   - name: Installations
@@ -48,6 +50,20 @@ tags:
     description: Derived generation figures across a district or province
 
 paths:
+  /health:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      summary: Check that the service is running
+      description: Public liveness check. No token is needed, so the hosting platform and monitoring can call it.
+      security: []
+      responses:
+        '200':
+          description: The service is running
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
   /provinces:
     get:
       tags: [Hierarchy]
@@ -710,6 +726,14 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
     Province:
       type: object
       required: [province_id, name]
