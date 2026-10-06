@@ -1,3 +1,6 @@
+// Loads .env for local runs; on Vercel the variables come from the project settings.
+require('dotenv').config({ quiet: true });
+
 const app = require('./app');
 
 // Local runs only; on Vercel, api/index.js serves the app and this file never runs.
