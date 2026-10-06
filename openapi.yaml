@@ -38,6 +38,8 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Operations
+    description: Service status for the hosting platform and monitoring
   - name: Hierarchy
     description: Provinces, districts and grid substations (read-only reference data)
   - name: Installations
@@ -48,6 +50,30 @@ tags:
     description: Derived generation figures across a district or province
 
 paths:
+  /health:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      summary: Check that the service and its database are running
+      description: Public liveness check. No token is needed, so the hosting platform and monitoring can call it. The database is pinged on every call.
+      security: []
+      responses:
+        '200':
+          description: The service is running and the database answers
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: The database cannot be reached (`SERVICE_UNAVAILABLE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                code: SERVICE_UNAVAILABLE
+                message: The database cannot be reached.
+                details: []
+                more_info: /api-docs#error-codes
+
   /provinces:
     get:
       tags: [Hierarchy]
@@ -710,6 +736,18 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   schemas:
+    Health:
+      type: object
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
+        database:
+          type: string
+          enum: [connected]
+          example: connected
     Province:
       type: object
       required: [province_id, name]
