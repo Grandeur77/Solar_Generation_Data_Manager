@@ -1,6 +1,6 @@
 const app = require('./app');
 
-// Render injects PORT at runtime; 3000 is only the local default.
+// Local runs only; on Vercel, api/index.js serves the app and this file never runs.
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

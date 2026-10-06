@@ -17,6 +17,9 @@ coverage/
 *.pem
 *.key
 
+# Vercel CLI project link (local only)
+.vercel/
+
 # Logs
 npm-debug.log*
 *.log
