@@ -297,13 +297,13 @@ flowchart LR
 | National user | Read all | Read all | Read all | Read all | Read all |
 | Province user | Read own province | Read districts in own province | Read substations in own province | Read installations in own province | Read readings in own province |
 | District user | None | Read own district | Read substations in own district | Read installations in own district | Read readings in own district |
-| Registry admin | Read all | Read all | Read all | Read all; **write:** register, replace and remove installations | None |
+| Registry admin | Read all | Read all | Read all | Read all; **write:** register, replace and remove installations | Read all |
 
 What the table shows:
 - **Exactly one client writes readings: the device, and only for its own installation.** It cannot read anything, including its own past readings.
 - **No client changes or removes a reading** (D7). Removing an installation leaves its readings in place as history.
 - **SLSEA users write nothing.** National, province and district users differ only in how much of the hierarchy they can read.
-- **The registry admin maintains installations but never touches readings.** It reads the hierarchy so it can attach a new installation to the right substation.
+- **The registry admin maintains installations but never writes readings.** It reads the whole hierarchy, so it can attach a new installation to the right substation, and it reads readings, because an installation's representation includes its latest reading.
 - **Province, District and GridSubstation are written by no client.** They are fixed reference data loaded with the seed, so no client needs to change them.
 - **User accounts are not managed by any client.** They are created with the seed, so no client can grant itself a wider jurisdiction or role.
 
@@ -469,6 +469,7 @@ What the table shows:
 |---|---|---|---|
 | `generation_readings` | `{ installation_id: 1, timestamp: -1 }` | **Yes** | Rejects a second reading for the same installation and time (for example a device retry). Also finds the latest reading, and pages, sorts and time-filters one installation's history. |
 | `generation_readings` | `{ district_id: 1, timestamp: -1 }` | No | District generation summary and district-scoped reading queries. |
+| `generation_readings` | `{ province_id: 1, timestamp: -1 }` | No | Province generation summary. |
 | `installations` | `{ meter_id: 1 }` | **Yes** | One meter per installation; finds the installation when a device signs in. |
 | `installations` | `{ substation_id: 1 }`, `{ district_id: 1 }`, `{ province_id: 1 }` | No | Filtering installations by substation, district or province, and jurisdiction scope. |
 | `grid_substations` | `{ district_id: 1 }` | No | Filtering substations by district. |
@@ -477,7 +478,7 @@ What the table shows:
 
 - **Every `_id` is unique automatically**, so no index is declared for it.
 - **`timestamp: -1` stores newest first**, which matches the most common read. MongoDB can walk the same index backwards for oldest-first.
-- **`substation_id` and `province_id` on readings are stored but not indexed.** No planned query needs them yet. Every index slows each write, and readings are written about 96 times a day per installation, so an index is added only when a query needs it.
+- **`substation_id` on readings is stored but not indexed.** No planned query needs it yet. Every index slows each write, and readings are written about 96 times a day per installation, so an index is added only when a query needs it.
 
 ### 8.6 Why readings are not embedded in the installation
 
