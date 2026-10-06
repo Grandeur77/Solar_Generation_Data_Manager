@@ -54,15 +54,25 @@ paths:
     get:
       tags: [Operations]
       operationId: getHealth
-      summary: Check that the service is running
-      description: Public liveness check. No token is needed, so the hosting platform and monitoring can call it.
+      summary: Check that the service and its database are running
+      description: Public liveness check. No token is needed, so the hosting platform and monitoring can call it. The database is pinged on every call.
       security: []
       responses:
         '200':
-          description: The service is running
+          description: The service is running and the database answers
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: The database cannot be reached (`SERVICE_UNAVAILABLE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                code: SERVICE_UNAVAILABLE
+                message: The database cannot be reached.
+                details: []
+                more_info: /api-docs#error-codes
 
   /provinces:
     get:
@@ -728,12 +738,16 @@ components:
   schemas:
     Health:
       type: object
-      required: [status]
+      required: [status, database]
       properties:
         status:
           type: string
           enum: [ok]
           example: ok
+        database:
+          type: string
+          enum: [connected]
+          example: connected
     Province:
       type: object
       required: [province_id, name]
