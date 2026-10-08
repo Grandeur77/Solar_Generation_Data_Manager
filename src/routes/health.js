@@ -1,5 +1,6 @@
 const express = require('express');
 const { connectToDatabase } = require('../config/db');
+const { errorBody } = require('../utils/errors');
 
 const router = express.Router();
 
@@ -15,12 +16,7 @@ router.get('/', async (req, res) => {
   } catch (err) {
     // Log the cause server-side only; the client never sees connection details.
     console.error('Health check: database unreachable:', err.message);
-    res.status(503).json({
-      code: 'SERVICE_UNAVAILABLE',
-      message: 'The database cannot be reached.',
-      details: [],
-      more_info: '/api-docs#error-codes',
-    });
+    res.status(503).json(errorBody('SERVICE_UNAVAILABLE', 'The database cannot be reached.'));
   }
 });
 

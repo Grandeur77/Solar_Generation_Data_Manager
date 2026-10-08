@@ -63,6 +63,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
         '503':
           description: The database cannot be reached (`SERVICE_UNAVAILABLE`)
           content:
