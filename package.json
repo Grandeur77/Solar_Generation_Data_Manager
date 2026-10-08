@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "jest --passWithNoTests"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
     "dotenv": "^18.0.5",
@@ -19,6 +19,12 @@
     "mongoose": "^9.11.0"
   },
   "devDependencies": {
-    "jest": "^30.5.2"
+    "jest": "^30.5.2",
+    "mongodb-memory-server": "^11.3.0",
+    "supertest": "^7.3.1"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 10000
   }
 }
