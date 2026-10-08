@@ -127,10 +127,11 @@ describe('GET /installations', () => {
 });
 
 describe('GET /installations/{installation-id}', () => {
-  test('returns the plain installation, exactly', async () => {
+  // The member is now the composite (tests/installation-composite.test.js); its installation part is unchanged.
+  test('returns the installation fields', async () => {
     const res = await get('/installations/INS-0004');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual(expectedInstallation('INS-0004'));
+    expect(res.body).toMatchObject(expectedInstallation('INS-0004'));
   });
 
   test('unknown id → 404 INSTALLATION_NOT_FOUND', async () => {
