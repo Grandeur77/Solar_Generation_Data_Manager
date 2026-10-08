@@ -1,0 +1,39 @@
+const request = require('supertest');
+const mongoose = require('mongoose');
+const app = require('../src/app');
+const { testDatabaseUri } = require('./helpers/test-db');
+
+afterAll(() => mongoose.disconnect());
+
+describe('GET /health', () => {
+  // Runs first on purpose: with no URI, db.js rejects without caching anything,
+  // so the next test can still open a connection.
+  test('returns 503 with the standard error body when the database is not configured', async () => {
+    delete process.env.MONGODB_URI;
+    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await request(app).get('/health');
+
+    expect(res.status).toBe(503);
+    expect(res.headers['content-type']).toMatch(/^application\/json/);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toEqual({
+      code: 'SERVICE_UNAVAILABLE',
+      message: expect.any(String),
+      details: [],
+      more_info: '/api-docs#error-codes',
+    });
+    quiet.mockRestore();
+  });
+
+  test('returns 200 with the database connected', async () => {
+    process.env.MONGODB_URI = testDatabaseUri();
+
+    const res = await request(app).get('/health');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/^application\/json/);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).toEqual({ status: 'ok', database: 'connected' });
+  });
+});
