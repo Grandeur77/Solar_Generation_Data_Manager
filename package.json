@@ -13,7 +13,8 @@
     "dev": "node --watch src/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "setup-db": "node scripts/setup-db.js",
-    "generate-hierarchy": "node scripts/generate-hierarchy.js"
+    "generate-hierarchy": "node scripts/generate-hierarchy.js",
+    "seed": "node scripts/seed.js"
   },
   "dependencies": {
     "dotenv": "^18.0.5",

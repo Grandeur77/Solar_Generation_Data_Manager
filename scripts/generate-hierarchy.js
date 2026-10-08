@@ -8,17 +8,8 @@ const Province = require('../src/models/province');
 const District = require('../src/models/district');
 const GridSubstation = require('../src/models/grid-substation');
 const SolarInstallation = require('../src/models/solar-installation');
+const { makeRandom } = require('./lib/random');
 
-// Small seeded random number generator (mulberry32): same seed, same sequence, every run.
-function makeRandom(seed) {
-  let a = seed;
-  return function random() {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 const random = makeRandom(6007);
 const between = (min, max) => min + random() * (max - min);
 const pick = (list) => list[Math.floor(random() * list.length)];
