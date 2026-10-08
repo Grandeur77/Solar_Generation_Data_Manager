@@ -14,9 +14,11 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "setup-db": "node scripts/setup-db.js",
     "generate-hierarchy": "node scripts/generate-hierarchy.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "verify-seed": "node scripts/verify-seed.js"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
     "mongoose": "^9.11.0"
@@ -28,6 +30,8 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testTimeout": 10000
+    "testTimeout": 10000,
+    "globalSetup": "<rootDir>/tests/setup/global-setup.js",
+    "globalTeardown": "<rootDir>/tests/setup/global-teardown.js"
   }
 }

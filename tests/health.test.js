@@ -1,19 +1,9 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
 const app = require('../src/app');
+const { testDatabaseUri } = require('./helpers/test-db');
 
-// A throwaway in-memory MongoDB, so tests never touch Atlas or need a real password.
-let mongod;
-
-beforeAll(async () => {
-  mongod = await MongoMemoryServer.create();
-}, 120000); // the first run downloads a MongoDB binary
-
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongod.stop();
-});
+afterAll(() => mongoose.disconnect());
 
 describe('GET /health', () => {
   // Runs first on purpose: with no URI, db.js rejects without caching anything,
@@ -37,7 +27,7 @@ describe('GET /health', () => {
   });
 
   test('returns 200 with the database connected', async () => {
-    process.env.MONGODB_URI = mongod.getUri('solar_test');
+    process.env.MONGODB_URI = testDatabaseUri();
 
     const res = await request(app).get('/health');
 

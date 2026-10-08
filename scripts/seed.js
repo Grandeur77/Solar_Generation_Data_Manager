@@ -4,9 +4,12 @@
 // duplicates anything and moves the reading window up to "now" (re-seed before submission and
 // the viva so the last-known readings and today's summary are fresh).
 // Run scripts/setup-db.js first so the unique installation_id + timestamp index exists.
+const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
+const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const { connectToDatabase } = require('../src/config/db');
 const { makeRandom } = require('./lib/random');
@@ -15,7 +18,50 @@ const District = require('../src/models/district');
 const GridSubstation = require('../src/models/grid-substation');
 const SolarInstallation = require('../src/models/solar-installation');
 const GenerationReading = require('../src/models/generation-reading');
+const User = require('../src/models/user');
 const hierarchy = require('../seed/hierarchy.json');
+
+// Plain-text credentials go only to this file, which .gitignore excludes (*credentials*.json).
+const CREDENTIALS_FILE = path.join(__dirname, '..', 'seed', 'credentials.json');
+const BCRYPT_ROUNDS = 10;
+
+// SLSEA accounts. Colombo and Gampaha are neighbouring districts in the same province, and
+// Western and Central are two provinces, so tests can prove one jurisdiction can't read another.
+const USERS = [
+  { _id: 'USR-001', name: 'National Analyst', email: 'national.analyst@slsea.example', role: 'analyst', jurisdiction_level: 'national', status: 'active' },
+  { _id: 'USR-002', name: 'Western Province Analyst', email: 'western.analyst@slsea.example', role: 'analyst', jurisdiction_level: 'province', province_id: 'PV-01', status: 'active' },
+  { _id: 'USR-003', name: 'Central Province Analyst', email: 'central.analyst@slsea.example', role: 'analyst', jurisdiction_level: 'province', province_id: 'PV-02', status: 'active' },
+  { _id: 'USR-004', name: 'Colombo District Analyst', email: 'colombo.analyst@slsea.example', role: 'analyst', jurisdiction_level: 'district', district_id: 'DT-01', status: 'active' },
+  { _id: 'USR-005', name: 'Gampaha District Analyst', email: 'gampaha.analyst@slsea.example', role: 'analyst', jurisdiction_level: 'district', district_id: 'DT-02', status: 'active' },
+  // Withdrawn account, so a valid password with an inactive status can be tested.
+  { _id: 'USR-006', name: 'Kandy District Analyst (inactive)', email: 'kandy.analyst@slsea.example', role: 'analyst', jurisdiction_level: 'district', district_id: 'DT-04', status: 'inactive' },
+  { _id: 'USR-007', name: 'Registry Admin', email: 'registry.admin@slsea.example', role: 'registry_admin', jurisdiction_level: 'national', status: 'active' },
+];
+
+// Random bytes from the operating system's secure generator (never the seeded generator,
+// which is predictable by design), as URL-safe text.
+const newSecret = (bytes) => crypto.randomBytes(bytes).toString('base64url');
+
+function writeCredentials(devices, accounts) {
+  const file = {
+    note: 'Local only. Never commit or share. New secrets are generated on every seed run, so older copies stop working.',
+    generated_at: new Date().toISOString(),
+    users: accounts.map(({ _id, email, password, role, jurisdiction_level, province_id, district_id, status }) => ({
+      user_id: _id,
+      email,
+      password,
+      role,
+      jurisdiction_level,
+      ...(province_id && { province_id }),
+      ...(district_id && { district_id }),
+      status,
+    })),
+    devices,
+  };
+  fs.writeFileSync(CREDENTIALS_FILE, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 });
+  // mode only applies when the file is first created, so tighten an existing file too: owner read/write only.
+  fs.chmodSync(CREDENTIALS_FILE, 0o600);
+}
 
 const MINUTE_MS = 60 * 1000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -70,7 +116,7 @@ function dailyWeather({ start, end }, random) {
   return weather;
 }
 
-function generateReadings(installation, window, weather, random) {
+function generateReadings(installation, window, weather, random, now) {
   const between = (min, max) => min + random() * (max - min);
   // Panel orientation, shading and losses differ per site.
   const performance = between(0.75, 0.85);
@@ -104,7 +150,9 @@ function generateReadings(installation, window, weather, random) {
       energy_kwh: round(energy, 2),
       // Grid voltage around 230 V, rising slightly when the site exports at midday.
       voltage: round(230 + 5 * sun * cloud + (random() * 2 - 1) * 1.5, 1),
-      received_at: new Date(t + Math.round(delay)),
+      // The newest readings are only minutes old, so a late arrival could otherwise land after the
+      // seed ran. A reading can't be received in the future, and received_at feeds Last-Modified.
+      received_at: new Date(Math.min(t + Math.round(delay), now)),
       substation_id: installation.substation_id,
       district_id: installation.district_id,
       province_id: installation.province_id,
@@ -122,25 +170,54 @@ async function main() {
 
   if (!process.argv.includes('--yes')) {
     console.log(`Target: ${target}`);
-    console.log('This deletes and reloads provinces, districts, grid_substations, installations and generation_readings.');
+    console.log('This deletes and reloads provinces, districts, grid_substations, installations, generation_readings and users,');
+    console.log(`and writes new credentials to ${path.relative(process.cwd(), CREDENTIALS_FILE)}.`);
     console.log('Run again with --yes to continue:  npm run seed -- --yes');
     process.exitCode = 1;
     return;
   }
   console.log(`Seeding ${target}`);
 
-  // Children first, so no reading is ever left pointing at a deleted installation.
-  for (const Model of [GenerationReading, SolarInstallation, GridSubstation, District, Province]) {
+  // New credentials every run. The file is written before the hashes reach the database,
+  // so a secret can never exist only as an unrecoverable hash.
+  const devices = hierarchy.installations.map(({ installation_id, meter_id }) => ({
+    installation_id,
+    meter_id,
+    device_secret: newSecret(32),
+  }));
+  const accounts = USERS.map((user) => ({ ...user, password: newSecret(18) }));
+  writeCredentials(devices, accounts);
+
+  const secretFor = new Map(devices.map((d) => [d.installation_id, d.device_secret]));
+  const installationDocs = await Promise.all(
+    toDocs(hierarchy.installations, 'installation_id').map(async (doc) => ({
+      ...doc,
+      device_secret_hash: await bcrypt.hash(secretFor.get(doc._id), BCRYPT_ROUNDS),
+    }))
+  );
+  const userDocs = await Promise.all(
+    accounts.map(async ({ password, ...user }) => ({
+      ...user,
+      password_hash: await bcrypt.hash(password, BCRYPT_ROUNDS),
+    }))
+  );
+
+  // Hashing is done above, while the old data is still live, so the database is only empty
+  // for the delete-then-insert below. Children first, so no reading is ever left pointing at
+  // a deleted installation.
+  for (const Model of [GenerationReading, SolarInstallation, GridSubstation, District, Province, User]) {
     await Model.deleteMany({});
   }
 
   await Province.insertMany(toDocs(hierarchy.provinces, 'province_id'));
   await District.insertMany(toDocs(hierarchy.districts, 'district_id'));
   await GridSubstation.insertMany(toDocs(hierarchy.substations, 'substation_id'));
-  await SolarInstallation.insertMany(toDocs(hierarchy.installations, 'installation_id'));
+  await SolarInstallation.insertMany(installationDocs);
+  await User.insertMany(userDocs);
 
   const random = makeRandom(2026);
-  const window = readingWindow(Date.now());
+  const now = Date.now();
+  const window = readingWindow(now);
   const weather = dailyWeather(window, random);
 
   let batch = [];
@@ -154,7 +231,7 @@ async function main() {
 
   for (const installation of hierarchy.installations) {
     if (NO_READINGS.includes(installation.installation_id)) continue;
-    for (const reading of generateReadings(installation, window, weather, random)) {
+    for (const reading of generateReadings(installation, window, weather, random, now)) {
       batch.push(reading);
       if (batch.length >= BATCH_SIZE) await flush();
     }
@@ -168,6 +245,9 @@ async function main() {
   console.log(`  substations     ${hierarchy.substations.length}`);
   console.log(`  installations   ${hierarchy.installations.length} (no readings: ${NO_READINGS.join(', ')})`);
   console.log(`  readings        ${total}`);
+  console.log(`  users           ${USERS.length} (national, 2 province, 3 district incl. 1 inactive, 1 registry admin)`);
+  console.log(`  device secrets  ${devices.length}, hashed with bcrypt`);
+  console.log(`  credentials     ${path.relative(process.cwd(), CREDENTIALS_FILE)} (git-ignored, owner-only)`);
   console.log(`  window          ${colombo(window.start)} to ${colombo(window.end)}`);
   console.log(`  cloudy days     ${cloudyDays.join(', ')}`);
 }
