@@ -7,11 +7,21 @@ info:
     meters push generation readings (write path); SLSEA users read the hierarchy,
     installations and generation history, scoped to their jurisdiction (read path).
 
-    **First cut (Step 2.8):** paths, parameters and schemas only. No implementation
-    exists yet. Authentication scopes are completed in Step 9.9 and token issuing
-    (`POST /auth/tokens`) is added in Phase 9.
+    ## What is live now
+
+    **Implemented:** `/health` and the whole read path: provinces, districts, grid substations
+    and installations (collections with their filters, and members), the installation composite,
+    the last-known reading, and one installation's readings collection and reading member.
+
+    **Documented here but not live yet** (operations marked *(planned)*, plus):
+    - Authentication: every route is currently public; 401 and 403 arrive with the security phase.
+    - Conditional GET: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers as described.
+    - Pagination, sorting, time-window and status filters on installations and readings: both
+      collections currently return a flat array.
+    - Writes (create, replace, delete installations; post readings) and the generation summaries.
 
     Every response is `application/json`. Every error uses the `Error` schema.
+    A well-formed filter value that matches nothing returns `200 []`; a malformed one returns 400.
 
     ## Error codes
 
@@ -100,6 +110,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /provinces/{province-id}:
     parameters:
@@ -125,8 +136,9 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/ProvinceNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /provinces/{province-id}/generation-summary:
     parameters:
@@ -134,7 +146,7 @@ paths:
     get:
       tags: [Summaries]
       operationId: getProvinceGenerationSummary
-      summary: Current total power and a day's energy across a province
+      summary: (planned) Current total power and a day's energy across a province
       parameters:
         - $ref: '#/components/parameters/Date'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -180,10 +192,11 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/District' }
         '304': { $ref: '#/components/responses/NotModified' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400': { $ref: '#/components/responses/InvalidQueryParameter' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /districts/{district-id}:
     parameters:
@@ -209,8 +222,9 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/DistrictNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /districts/{district-id}/generation-summary:
     parameters:
@@ -218,7 +232,7 @@ paths:
     get:
       tags: [Summaries]
       operationId: getDistrictGenerationSummary
-      summary: Current total power and a day's energy across a district
+      summary: (planned) Current total power and a day's energy across a district
       parameters:
         - $ref: '#/components/parameters/Date'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -265,10 +279,11 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/GridSubstation' }
         '304': { $ref: '#/components/responses/NotModified' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400': { $ref: '#/components/responses/InvalidQueryParameter' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /grid-substations/{substation-id}:
     parameters:
@@ -294,27 +309,25 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/SubstationNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /installations:
     get:
       tags: [Installations]
       operationId: listInstallations
-      summary: List installations in the caller's jurisdiction (paginated)
+      summary: List installations in the caller's jurisdiction
+      description: Currently a flat array in installation_id order. Pagination, sorting and the status filter are planned (InstallationPage).
       parameters:
         - $ref: '#/components/parameters/ProvinceIdFilter'
         - $ref: '#/components/parameters/DistrictIdFilter'
         - $ref: '#/components/parameters/SubstationIdFilter'
-        - $ref: '#/components/parameters/Status'
-        - $ref: '#/components/parameters/InstallationSort'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/IfNoneMatch'
         - $ref: '#/components/parameters/IfModifiedSince'
       responses:
         '200':
-          description: One page of installations
+          description: Installations (plain shape, no last_reading)
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
@@ -322,16 +335,19 @@ paths:
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/InstallationPage' }
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Installation' }
         '304': { $ref: '#/components/responses/NotModified' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400': { $ref: '#/components/responses/InvalidQueryParameter' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     post:
       tags: [Installations]
       operationId: createInstallation
-      summary: Register a new installation (registry admin)
+      summary: (planned) Register a new installation (registry admin)
       requestBody:
         required: true
         content:
@@ -379,12 +395,13 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/InstallationNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     put:
       tags: [Installations]
       operationId: replaceInstallation
-      summary: Replace a whole installation (registry admin)
+      summary: (planned) Replace a whole installation (registry admin)
       description: Whole-document replacement. Every writable field must be sent; nothing is merged. PUT never creates an installation.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
@@ -414,7 +431,7 @@ paths:
     delete:
       tags: [Installations]
       operationId: deleteInstallation
-      summary: Remove an installation (registry admin). Its readings are kept.
+      summary: (planned) Remove an installation (registry admin). Its readings are kept.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       responses:
@@ -458,7 +475,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                noReadingsYet:
+                  summary: The installation exists but has not reported yet
+                  value: { code: NO_READINGS_YET, message: Installation INS-0030 has not reported any readings yet., details: [], more_info: /api-docs#error-codes }
+                installationNotFound:
+                  summary: No such installation
+                  value: { code: INSTALLATION_NOT_FOUND, message: No installation with id INS-9999., details: [], more_info: /api-docs#error-codes }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /installations/{installation-id}/readings:
     parameters:
@@ -466,19 +491,14 @@ paths:
     get:
       tags: [Readings]
       operationId: listReadings
-      summary: Generation history of one installation (paginated)
+      summary: Generation history of one installation
+      description: Currently the whole history as a flat array, newest first. Pagination, sorting, the time window and min-power-kw are planned (ReadingPage). An existing installation with no readings returns 200 [].
       parameters:
-        - $ref: '#/components/parameters/From'
-        - $ref: '#/components/parameters/To'
-        - $ref: '#/components/parameters/MinPowerKw'
-        - $ref: '#/components/parameters/ReadingSort'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/IfNoneMatch'
         - $ref: '#/components/parameters/IfModifiedSince'
       responses:
         '200':
-          description: One page of readings
+          description: The installation's readings, newest first
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
@@ -486,17 +506,19 @@ paths:
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ReadingPage' }
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reading' }
         '304': { $ref: '#/components/responses/NotModified' }
-        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/InstallationNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     post:
       tags: [Readings]
       operationId: createReading
-      summary: A meter pushes a new reading for its own installation
+      summary: (planned) A meter pushes a new reading for its own installation
       description: The installation comes from the path, never the body. A 409 READING_DUPLICATE means the reading is already stored; a device treats it as success.
       requestBody:
         required: true
@@ -547,8 +569,20 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404':
+          description: INSTALLATION_NOT_FOUND when the parent is missing, or READING_NOT_FOUND when this installation has no such reading (including a real reading id that belongs to another installation)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                readingNotFound:
+                  summary: No such reading under this installation
+                  value: { code: READING_NOT_FOUND, message: Installation INS-0002 has no reading with id 66f2c1a9e4b0a1b2c3d4e5f6., details: [], more_info: /api-docs#error-codes }
+                installationNotFound:
+                  summary: The parent installation is missing
+                  value: { code: INSTALLATION_NOT_FOUND, message: No installation with id INS-9999., details: [], more_info: /api-docs#error-codes }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
 components:
   securitySchemes:
@@ -578,7 +612,7 @@ components:
       name: installation-id
       in: path
       required: true
-      schema: { type: string, example: INS-0001 }
+      schema: { type: string, pattern: '^INS-[0-9]{4}$', example: INS-0001 }
     ReadingId:
       name: reading-id
       in: path
@@ -587,18 +621,18 @@ components:
     ProvinceIdFilter:
       name: province-id
       in: query
-      description: Only members in this province. Intersected with the caller's jurisdiction; outside it returns 403.
-      schema: { type: string, example: PV-01 }
+      description: Only members in this province. Combines with the other filters (all must match). Malformed or repeated → 400 INVALID_QUERY_PARAMETER. From the security phase it is also intersected with the caller's jurisdiction (outside it → 403).
+      schema: { type: string, pattern: '^PV-[0-9]{2}$', example: PV-01 }
     DistrictIdFilter:
       name: district-id
       in: query
-      description: Only members in this district. Intersected with the caller's jurisdiction; outside it returns 403.
-      schema: { type: string, example: DT-01 }
+      description: Only members in this district. Combines with the other filters (all must match). Malformed or repeated → 400 INVALID_QUERY_PARAMETER. From the security phase it is also intersected with the caller's jurisdiction (outside it → 403).
+      schema: { type: string, pattern: '^DT-[0-9]{2}$', example: DT-01 }
     SubstationIdFilter:
       name: substation-id
       in: query
-      description: Only installations on this substation. Intersected with the caller's jurisdiction; outside it returns 403.
-      schema: { type: string, example: SS-001 }
+      description: Only installations on this substation. Combines with the other filters (all must match). Malformed or repeated → 400 INVALID_QUERY_PARAMETER. From the security phase it is also intersected with the caller's jurisdiction (outside it → 403).
+      schema: { type: string, pattern: '^SS-[0-9]{3}$', example: SS-001 }
     Status:
       name: status
       in: query
@@ -735,6 +769,47 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    InvalidQueryParameter:
+      description: A filter value is malformed or given more than once (INVALID_QUERY_PARAMETER)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            code: INVALID_QUERY_PARAMETER
+            message: province-id must be a single id like PV-01.
+            details:
+              - { field: province-id, location: query, issue: Must match PV-01., reference: null }
+            more_info: /api-docs#error-codes
+    ProvinceNotFound:
+      description: No province with this id (PROVINCE_NOT_FOUND)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: PROVINCE_NOT_FOUND, message: No province with id PV-99., details: [], more_info: /api-docs#error-codes }
+    DistrictNotFound:
+      description: No district with this id (DISTRICT_NOT_FOUND)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: DISTRICT_NOT_FOUND, message: No district with id DT-99., details: [], more_info: /api-docs#error-codes }
+    SubstationNotFound:
+      description: No grid substation with this id (SUBSTATION_NOT_FOUND)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: SUBSTATION_NOT_FOUND, message: No grid substation with id SS-999., details: [], more_info: /api-docs#error-codes }
+    InstallationNotFound:
+      description: No installation with this id; for a scoped resource, the parent is missing (INSTALLATION_NOT_FOUND)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: INSTALLATION_NOT_FOUND, message: No installation with id INS-9999., details: [], more_info: /api-docs#error-codes }
+    ServiceUnavailable:
+      description: The database cannot be reached (SERVICE_UNAVAILABLE)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: SERVICE_UNAVAILABLE, message: The database cannot be reached., details: [], more_info: /api-docs#error-codes }
 
   schemas:
     Health:
@@ -797,6 +872,9 @@ components:
           required: [last_reading]
           properties:
             last_reading:
+              # OpenAPI 3.0.3: nullable only takes effect when type is set in the same schema.
+              description: The newest reading, or null when the installation has not reported yet.
+              type: object
               nullable: true
               allOf:
                 - $ref: '#/components/schemas/Reading'
