@@ -53,4 +53,20 @@ function validateInstallationBody(body, { requireInstallationId }) {
   return fields;
 }
 
-module.exports = { validateInstallationBody };
+// PUT body: the whole installation without the id, which comes from the path. An installation_id
+// in the body is allowed only if it equals the path id; a different one is ID_MISMATCH, because
+// PUT can't rename an installation (or replace a different one than the URI names).
+function validateReplacementBody(body, pathInstallationId) {
+  if (body && typeof body === 'object' && !Array.isArray(body) && 'installation_id' in body) {
+    const { installation_id: bodyId, ...rest } = body;
+    if (bodyId !== pathInstallationId) {
+      throw new ApiError(400, 'ID_MISMATCH', `The body's installation_id does not match the URL (${pathInstallationId}).`, [
+        { field: 'installation_id', location: 'body', issue: `Must equal ${pathInstallationId}, or be left out.`, reference: `/installations/${pathInstallationId}` },
+      ]);
+    }
+    return validateInstallationBody(rest, { requireInstallationId: false });
+  }
+  return validateInstallationBody(body, { requireInstallationId: false });
+}
+
+module.exports = { validateInstallationBody, validateReplacementBody };
