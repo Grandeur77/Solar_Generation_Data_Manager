@@ -10,7 +10,6 @@ const { readIdParam, readEnumParam, readNumberParam, throwIfInvalid } = require(
 const { readPagination, pageBody } = require('../../utils/pagination');
 const { readTimeWindow, checkTimeWindowOrder, timestampCondition } = require('../../utils/time-window');
 const { readSort, mongoSort } = require('../../utils/sort');
-const { newest } = require('../../utils/http-cache');
 const { ApiError } = require('../../utils/errors');
 
 const router = express.Router();
@@ -43,7 +42,6 @@ router.get('/', async (req, res) => {
   if (status) active.push(['status', status]);
   active.push(['sort', sortValue]);
 
-  res.locals.lastModified = newest(results.map((i) => i.updated_at));
   res.json(pageBody({ path: '/installations', page, pageSize, count, results, active }));
 });
 
@@ -103,7 +101,6 @@ router.get('/:installationId/readings', async (req, res) => {
   if (minPowerKw !== undefined) active.push(['min-power-kw', String(minPowerKw)]);
   active.push(['sort', sortValue]);
 
-  res.locals.lastModified = newest(results.map((r) => r.received_at));
   res.json(pageBody({ path: `/installations/${installationId}/readings`, page, pageSize, count, results, active }));
 });
 

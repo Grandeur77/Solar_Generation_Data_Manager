@@ -1,7 +1,6 @@
 const express = require('express');
 const { listDistricts, getDistrict } = require('../../services/district-service');
 const { readIdParam, throwIfInvalid } = require('../../utils/query');
-const { newest } = require('../../utils/http-cache');
 
 const router = express.Router();
 
@@ -11,7 +10,6 @@ router.get('/', async (req, res) => {
   const provinceId = readIdParam(req.query, 'province-id', /^PV-\d{2}$/, 'PV-01', problems);
   throwIfInvalid(problems);
   const districts = await listDistricts({ provinceId });
-  res.locals.lastModified = newest(districts.map((d) => d.updated_at));
   res.json(districts);
 });
 

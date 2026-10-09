@@ -21,6 +21,11 @@ function isNotModified(req, etag, lastModified) {
 // Conditional GET for every resource: a successful GET gets a strong ETag (a hash of the exact
 // body), Last-Modified (set by the route in res.locals.lastModified), and caching headers. If the
 // client already holds the current version, it gets 304 Not Modified with an empty body instead.
+//
+// Only single resources set Last-Modified. A collection or page has no single change time: when a
+// member is removed (a DELETE, or a PUT that moves it out of a filter), no remaining member changed,
+// so a date built from the members would not advance and If-Modified-Since would wrongly answer 304.
+// Collections therefore rely on the ETag alone, which changes whenever the body does.
 function conditionalGet(req, res, next) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
 

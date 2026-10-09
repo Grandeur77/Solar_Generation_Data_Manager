@@ -1,7 +1,6 @@
 const express = require('express');
 const { listGridSubstations, getGridSubstation } = require('../../services/grid-substation-service');
 const { readIdParam, throwIfInvalid } = require('../../utils/query');
-const { newest } = require('../../utils/http-cache');
 
 const router = express.Router();
 
@@ -12,7 +11,6 @@ router.get('/', async (req, res) => {
   const districtId = readIdParam(req.query, 'district-id', /^DT-\d{2}$/, 'DT-01', problems);
   throwIfInvalid(problems);
   const substations = await listGridSubstations({ provinceId, districtId });
-  res.locals.lastModified = newest(substations.map((s) => s.updated_at));
   res.json(substations);
 });
 
