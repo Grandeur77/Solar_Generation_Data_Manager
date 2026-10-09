@@ -41,7 +41,8 @@ describe('every GET resource has a strong ETag and caching headers', () => {
     expect(res.status).toBe(200);
     expect(res.headers.etag).toMatch(/^"[0-9a-f]{40}"$/); // strong: quoted, no W/ prefix
     expect(res.headers['cache-control']).toBe('private, no-cache');
-    expect(res.headers.vary).toBe('Accept, Authorization');
+    expect(res.headers.vary).toMatch(/\bAccept\b/);
+    expect(res.headers.vary).toMatch(/\bAuthorization\b/);
   });
 
   test.each(MEMBERS)('single resource %s also has a valid Last-Modified', async (path) => {

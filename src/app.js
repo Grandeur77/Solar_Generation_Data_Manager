@@ -1,4 +1,5 @@
 const express = require('express');
+const helmet = require('helmet');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const docsRouter = require('./routes/docs');
@@ -11,12 +12,19 @@ const installationsWriteRouter = require('./routes/write/installations');
 const { acceptJson } = require('./middleware/accept-json');
 const { authenticate } = require('./middleware/authenticate');
 const { requireReadScope } = require('./middleware/authorize');
+const { corsPolicy } = require('./middleware/cors-policy');
+const { privateCaching } = require('./middleware/private-caching');
+const { rejectOperatorKeysInQuery } = require('./middleware/reject-operator-keys');
 const { requireDatabase } = require('./middleware/require-database');
 const { conditionalGet } = require('./middleware/conditional-get');
 const { unknownRoute, errorHandler } = require('./middleware/error-handler');
 
 // Builds the app without listening, so tests can drive it with supertest.
 const app = express();
+// On Vercel every request arrives through one proxy, which puts the real client address in
+// X-Forwarded-For. Trusting exactly that one hop gives the rate limiter the client's address
+// instead of the proxy's. Locally there is no proxy, so the header is not trusted (it could be faked).
+app.set('trust proxy', process.env.VERCEL ? 1 : false);
 // Express's automatic weak ETag is replaced by the strong ETags of conditionalGet (and of writes),
 // and must never appear on error responses.
 app.set('etag', false);
@@ -27,6 +35,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Security headers on every response: no X-Powered-By, nosniff, HSTS, a strict
+// Content-Security-Policy (the docs page sets its own, a little wider), and more.
+app.use(helmet());
+// Before authentication, so an allowed browser's preflight (which carries no token) is answered.
+app.use(corsPolicy);
+app.use(rejectOperatorKeysInQuery);
+
 // The docs page is HTML and the spec is YAML, so they sit before the JSON-only check.
 app.use('/api-docs', docsRouter);
 
@@ -35,7 +50,7 @@ app.use('/api-docs', docsRouter);
 // gets 401 and learns nothing else: not whether an id exists (404), which methods a URI allows
 // (405), or anything about its Accept header (406). /health, /api-docs and /auth/tokens stay
 // public, and a path that is no resource at all is still 404.
-app.use(['/provinces', '/districts', '/grid-substations', '/installations'], authenticate);
+app.use(['/provinces', '/districts', '/grid-substations', '/installations'], privateCaching, authenticate);
 
 app.use(acceptJson);
 app.use('/health', healthRouter);

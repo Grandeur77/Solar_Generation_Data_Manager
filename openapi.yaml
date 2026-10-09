@@ -55,8 +55,13 @@ info:
     the jurisdiction is 403 after the 404 check, including the composite, last-known reading, readings
     and both summaries.
 
-    **Documented here but not live yet:** rate limiting on `POST /auth/tokens` (429) and the other
-    hardening of Step 9.8.
+    Hardening: `POST /auth/tokens` allows 10 failed attempts per client address per 15 minutes
+    (successful sign-ins don't count), then 429 `TOO_MANY_REQUESTS` with `Retry-After`. Any key
+    containing `$` or `.` in a JSON body or query string is 400 `VALIDATION_FAILED` (NoSQL-injection
+    guard). Security headers on every response (no `X-Powered-By`, `nosniff`, HSTS, a strict
+    Content-Security-Policy). CORS only for browser origins listed by the operator (none by default).
+    Every response under the guarded paths has `Cache-Control: private, no-cache` (errors `no-store`)
+    and `Vary: Accept, Authorization`.
 
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.

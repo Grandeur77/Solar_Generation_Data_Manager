@@ -1,5 +1,6 @@
 const express = require('express');
 const { ApiError } = require('../utils/errors');
+const { rejectOperatorKeysInBody } = require('./reject-operator-keys');
 
 // Writes accept application/json only. Checked before parsing, so a form or plain-text body
 // gets 415 instead of being silently ignored.
@@ -16,4 +17,5 @@ function requireJsonContentType(req, res, next) {
 // instead of the misleading "not valid JSON".
 const parseJson = express.json({ limit: '100kb', strict: false });
 
-module.exports = { jsonBody: [requireJsonContentType, parseJson] };
+// After parsing, keys that could act as MongoDB operators are refused (reject-operator-keys.js).
+module.exports = { jsonBody: [requireJsonContentType, parseJson, rejectOperatorKeysInBody] };

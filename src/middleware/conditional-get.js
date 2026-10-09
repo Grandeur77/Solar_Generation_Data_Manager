@@ -19,7 +19,7 @@ function isNotModified(req, etag, lastModified) {
 }
 
 // Conditional GET for every resource: a successful GET gets a strong ETag (a hash of the exact
-// body), Last-Modified (set by the route in res.locals.lastModified), and caching headers. If the
+// body) and Last-Modified (set by the route in res.locals.lastModified). If the
 // client already holds the current version, it gets 304 Not Modified with an empty body instead.
 //
 // Only single resources set Last-Modified. A collection or page has no single change time: when a
@@ -38,10 +38,8 @@ function conditionalGet(req, res, next) {
     const { lastModified } = res.locals;
     res.set('ETag', etag);
     if (lastModified) res.set('Last-Modified', httpDate(lastModified));
-    // Browsers may keep a copy but must revalidate (which is where 304 pays off); shared caches
-    // must never serve one caller's jurisdiction-scoped data to another.
-    res.set('Cache-Control', 'private, no-cache');
-    res.set('Vary', 'Accept, Authorization');
+    // Cache-Control: private, no-cache and Vary: Accept, Authorization are already set for every
+    // guarded path (private-caching.js), so a 304 carries them too.
 
     if (isNotModified(req, etag, lastModified)) {
       // 304 keeps the validators and caching headers but has no body and no Content-Type.

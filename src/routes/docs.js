@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const helmet = require('helmet');
 
 const router = express.Router();
 
@@ -25,11 +26,33 @@ const page = `<!DOCTYPE html>
 <body>
   <div id="swagger-ui"></div>
   <script src="${CDN}/swagger-ui-bundle.js" integrity="${JS_SRI}" crossorigin="anonymous"></script>
-  <script>
-    window.ui = SwaggerUIBundle({ url: '/api-docs/openapi', dom_id: '#swagger-ui' });
-  </script>
+  <script src="/api-docs/init.js"></script>
 </body>
 </html>`;
+
+// The start-up script is a file of our own rather than an inline <script>, so the page's
+// Content-Security-Policy can forbid inline scripts entirely.
+const init = "window.ui = SwaggerUIBundle({ url: '/api-docs/openapi', dom_id: '#swagger-ui' });\n";
+
+// The JSON API gets helmet's strict default policy (app.js). This page needs a little more: scripts
+// and styles from our own origin and the pinned CDN only (Swagger UI also sets inline styles), and
+// its icons are data: images. Nothing else may load.
+const CDN_ORIGIN = 'https://cdn.jsdelivr.net';
+router.use(
+  helmet.contentSecurityPolicy({
+    useDefaults: true,
+    directives: {
+      scriptSrc: ["'self'", CDN_ORIGIN],
+      styleSrc: ["'self'", CDN_ORIGIN, "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+    },
+  })
+);
+
+router.get('/init.js', (req, res) => {
+  res.type('application/javascript').send(init);
+});
 
 // The spec is YAML, not JSON, so it is sent with its own media type instead of res.json().
 router.get('/openapi', (req, res) => {
