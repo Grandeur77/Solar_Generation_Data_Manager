@@ -11,6 +11,8 @@ function errorHandler(err, req, res, next) {
   if (res.headersSent) {
     return next(err);
   }
+  // An error is never stored by a cache and replayed later.
+  res.set('Cache-Control', 'no-store');
   if (err instanceof ApiError) {
     return res.status(err.status).json(errorBody(err.code, err.message, err.details));
   }

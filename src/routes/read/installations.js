@@ -10,6 +10,7 @@ const { readIdParam, readEnumParam, readNumberParam, throwIfInvalid } = require(
 const { readPagination, pageBody } = require('../../utils/pagination');
 const { readTimeWindow, checkTimeWindowOrder, timestampCondition } = require('../../utils/time-window');
 const { readSort, mongoSort } = require('../../utils/sort');
+const { newest } = require('../../utils/http-cache');
 const { ApiError } = require('../../utils/errors');
 
 const router = express.Router();
@@ -42,18 +43,23 @@ router.get('/', async (req, res) => {
   if (status) active.push(['status', status]);
   active.push(['sort', sortValue]);
 
+  res.locals.lastModified = newest(results.map((i) => i.updated_at));
   res.json(pageBody({ path: '/installations', page, pageSize, count, results, active }));
 });
 
 // Composite: the installation plus its latest reading, so a dashboard needs one request.
 router.get('/:installationId', async (req, res) => {
-  res.json(await getInstallationComposite(req.params.installationId));
+  const { body, lastModified } = await getInstallationComposite(req.params.installationId);
+  res.locals.lastModified = lastModified;
+  res.json(body);
 });
 
 // Processing resource (a noun, not a verb): the latest reading only, for clients that
 // need current output without the installation's details.
 router.get('/:installationId/last-known-reading', async (req, res) => {
-  res.json(await getLastKnownReading(req.params.installationId));
+  const reading = await getLastKnownReading(req.params.installationId);
+  res.locals.lastModified = reading.received_at;
+  res.json(reading);
 });
 
 const READING_SORT_FIELDS = ['timestamp', 'power_kw', 'energy_kwh'];
@@ -97,12 +103,16 @@ router.get('/:installationId/readings', async (req, res) => {
   if (minPowerKw !== undefined) active.push(['min-power-kw', String(minPowerKw)]);
   active.push(['sort', sortValue]);
 
+  res.locals.lastModified = newest(results.map((r) => r.received_at));
   res.json(pageBody({ path: `/installations/${installationId}/readings`, page, pageSize, count, results, active }));
 });
 
 // The member is what a 201 Location header will point to once readings can be created.
 router.get('/:installationId/readings/:readingId', async (req, res) => {
-  res.json(await getInstallationReading(req.params.installationId, req.params.readingId));
+  const reading = await getInstallationReading(req.params.installationId, req.params.readingId);
+  // A reading never changes after it is stored, so received_at is its last change.
+  res.locals.lastModified = reading.received_at;
+  res.json(reading);
 });
 
 module.exports = router;

@@ -11,4 +11,11 @@ function httpDate(date) {
   return new Date(date).toUTCString();
 }
 
-module.exports = { strongEtag, httpDate };
+// The latest of several change times (Dates or undefined), or undefined if none is known.
+// A collection's Last-Modified is the newest change among the members it returns.
+function newest(dates) {
+  const times = dates.filter(Boolean).map((d) => new Date(d).getTime());
+  return times.length > 0 ? new Date(Math.max(...times)) : undefined;
+}
+
+module.exports = { strongEtag, httpDate, newest };

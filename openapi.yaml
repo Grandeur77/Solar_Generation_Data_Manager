@@ -20,15 +20,18 @@ info:
     replacement, never a merge; PATCH returns 405) and `DELETE` (200, then 404; readings are kept).
     `/installations` and the readings history are paginated and sortable; installations filter by
     jurisdiction and `status`, readings by time window and `min-power-kw`.
+    Conditional GET on every resource: a strong `ETag`, `Last-Modified`, `Cache-Control: private, no-cache`
+    and `Vary: Accept, Authorization` on each successful GET; `If-None-Match` (which wins) or
+    `If-Modified-Since` matching the current version → 304 with an empty body.
 
     **Documented here but not live yet** (operations marked *(planned)*, plus):
     - Authentication: every route is currently public, including reading ingestion and the
       registry (temporary placeholders let every request through); 401 and 403 arrive with the
       security phase.
-    - Conditional GET on reads: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers.
     - `If-Match` / 412 on PUT and DELETE, and the generation summaries.
 
-    Every response is `application/json`. Every error uses the `Error` schema.
+    Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
+    or `Last-Modified`, and is sent with `Cache-Control: no-store`.
     A well-formed filter value that matches nothing returns `200 []`; a malformed one returns 400.
 
     ## Error codes

@@ -11,6 +11,7 @@ const {
   insertReading,
 } = require('./reading-service');
 const { plausibilityProblems } = require('../utils/reading-rules');
+const { newest } = require('../utils/http-cache');
 
 // Filters combine (AND). Installations carry copies of their district and province ids,
 // so every filter is a direct, indexed match with no lookup through the substation.
@@ -36,10 +37,13 @@ async function getInstallation(installationId) {
 
 // The composite: the installation's own fields plus exactly one nested reading (or null).
 // Never the history, and never flat last_* fields copied onto the installation.
+// lastModified is the later of the installation's own change and its latest reading's arrival.
 async function getInstallationComposite(installationId) {
   const installation = await getInstallation(installationId);
   const lastReading = await getLastReading(installationId);
-  return { ...installation.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
+  const body = { ...installation.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
+  const lastModified = newest([installation.updated_at, lastReading && lastReading.received_at]);
+  return { body, lastModified };
 }
 
 // The jurisdiction copies for an installation always come from its substation, never from the
