@@ -75,6 +75,8 @@ tags:
     description: Append-only generation readings of one installation
   - name: Summaries
     description: Derived generation figures across a district or province
+  - name: Auth
+    description: Bearer tokens for devices, SLSEA users and the registry admin
 
 paths:
   /health:
@@ -101,6 +103,60 @@ paths:
                 message: The database cannot be reached.
                 details: []
                 more_info: /api-docs#error-codes
+
+  /auth/tokens:
+    post:
+      tags: [Auth]
+      operationId: createToken
+      summary: (planned) Exchange credentials for a bearer token
+      description: |
+        Send exactly one credential pair: `email` + `password` (SLSEA user or registry admin) or
+        `meter_id` + `device_secret` (a meter). A successful call creates a new token, so it is 201,
+        and two identical calls give two different tokens.
+
+        | Client | `scope` | Lifetime |
+        |---|---|---|
+        | Meter | `installation-write` (bound to its installation, the token's `sub`) | 24 h |
+        | SLSEA user | `analyst-read-by-jurisdiction` (the token carries the user's jurisdiction) | 1 h |
+        | Registry admin | `asset-admin analyst-read-by-jurisdiction` | 15 min |
+
+        The token is not stored and cannot be fetched again, so there is no `Location`, and the
+        response is `Cache-Control: no-store`. Unknown accounts and wrong passwords give the same 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/UserCredentials'
+                - $ref: '#/components/schemas/DeviceCredentials'
+      responses:
+        '201':
+          description: A new token
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: INVALID_CREDENTIALS. Unknown email or meter, or wrong password or secret (one message for all).
+          headers:
+            WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: INVALID_CREDENTIALS, message: The credentials are not valid., details: [], more_info: /api-docs#error-codes }
+        '403':
+          description: ACCOUNT_INACTIVE. Correct credentials, but the user or installation is inactive.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /provinces:
     get:
@@ -1055,6 +1111,12 @@ components:
       schema: { type: string, example: '"a3f9c2d1"' }
 
   headers:
+    CacheControlNoStore:
+      description: Never stored by any cache
+      schema: { type: string, example: no-store }
+    RetryAfter:
+      description: Seconds to wait before trying again
+      schema: { type: integer, example: 60 }
     ETag:
       description: Strong validator, a quoted hash of the response body
       schema: { type: string, example: '"a3f9c2d1"' }
@@ -1094,6 +1156,13 @@ components:
       description: Missing, invalid or expired token
       headers:
         WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: TOO_MANY_REQUESTS. Too many token requests from this client; wait for Retry-After seconds.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1205,6 +1274,29 @@ components:
           example: { code: SERVICE_UNAVAILABLE, message: The database cannot be reached., details: [], more_info: /api-docs#error-codes }
 
   schemas:
+    UserCredentials:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: colombo.analyst@slsea.lk }
+        password: { type: string, format: password, minLength: 1, description: At most 72 bytes }
+    DeviceCredentials:
+      type: object
+      additionalProperties: false
+      required: [meter_id, device_secret]
+      properties:
+        meter_id: { type: string, pattern: '^MTR-[0-9]{6}$', example: MTR-000001 }
+        device_secret: { type: string, format: password, minLength: 1, description: At most 72 bytes }
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token: { type: string, description: 'Signed JWT (HS256). Claims: iss slsea-solar-api/auth, aud slsea-solar-api, sub (USR-… or INS-…), scope, jurisdiction (users only), iat, exp, jti', example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.signature }
+        token_type: { type: string, enum: [Bearer], example: Bearer }
+        expires_in: { type: integer, description: Seconds until the token expires, example: 3600 }
+        scope: { type: string, description: Space-separated scopes, example: analyst-read-by-jurisdiction }
+
     Health:
       type: object
       required: [status, database]
