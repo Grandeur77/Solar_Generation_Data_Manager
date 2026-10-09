@@ -114,9 +114,13 @@ async function getLastKnownReading(installationId) {
 }
 
 // Scoped collection: a missing parent is 404, an existing parent with no readings is 200 [].
-async function listInstallationReadings(installationId) {
+// The parent must exist first (404), and only then are the query values checked (400),
+// following the design's check order. `parseQuery` reads page, page-size and the time window.
+async function listInstallationReadings(installationId, parseQuery) {
   await ensureInstallationExists(installationId);
-  return listReadings(installationId);
+  const { page, pageSize, timestamp } = parseQuery();
+  const { results, count } = await listReadings(installationId, { skip: (page - 1) * pageSize, limit: pageSize, timestamp });
+  return { page, pageSize, results, count };
 }
 
 // Scoped member: the reading must belong to this installation.

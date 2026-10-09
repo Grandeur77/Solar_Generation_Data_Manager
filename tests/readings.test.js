@@ -27,29 +27,31 @@ const readingJson = (id) => {
 };
 
 describe('GET /installations/{installation-id}/readings', () => {
-  test('returns the installation\'s readings as a flat array, newest first', async () => {
+  // Paged since Step 7.1; the page edges are tested in readings-pagination.test.js.
+  test('returns the installation\'s readings, newest first, in the page object', async () => {
     const res = await get('/installations/INS-0001/readings');
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/^application\/json/);
-    expect(res.body.map((r) => r.reading_id)).toEqual([R(5), R(4), R(3), R(2), R(1)]);
+    expect(res.body).toMatchObject({ count: 5, next: null, previous: null });
+    expect(res.body.results.map((r) => r.reading_id)).toEqual([R(5), R(4), R(3), R(2), R(1)]);
   });
 
   test('each item is the reading shape exactly: no copied jurisdiction ids, no _id or __v', async () => {
     const res = await get('/installations/INS-0001/readings');
-    expect(res.body[0]).toEqual(readingJson(R(5)));
-    expect(res.body).toEqual([R(5), R(4), R(3), R(2), R(1)].map(readingJson));
+    expect(res.body.results[0]).toEqual(readingJson(R(5)));
+    expect(res.body.results).toEqual([R(5), R(4), R(3), R(2), R(1)].map(readingJson));
   });
 
   test('is scoped: only this installation\'s readings, never another\'s', async () => {
     const res = await get('/installations/INS-0002/readings');
-    expect(res.body.map((r) => r.reading_id)).toEqual([R(8), R(7), R(6)]);
-    res.body.forEach((r) => expect(r.installation_id).toBe('INS-0002'));
+    expect(res.body.results.map((r) => r.reading_id)).toEqual([R(8), R(7), R(6)]);
+    res.body.results.forEach((r) => expect(r.installation_id).toBe('INS-0002'));
   });
 
-  test('installation exists but has no readings → 200 []', async () => {
+  test('installation exists but has no readings → 200 with count 0 and empty results', async () => {
     const res = await get('/installations/INS-0005/readings');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.body).toEqual({ count: 0, next: null, previous: null, results: [] });
   });
 
   test('missing parent installation → 404 INSTALLATION_NOT_FOUND', async () => {

@@ -24,8 +24,8 @@ info:
       registry (temporary placeholders let every request through); 401 and 403 arrive with the
       security phase.
     - Conditional GET on reads: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers.
-    - Pagination, sorting, time-window and status filters on installations and readings: both
-      collections currently return a flat array.
+    - Sorting and `min-power-kw` on readings (readings are paginated, newest first, with a time window);
+      pagination, sorting and the status filter on `/installations` (currently a flat array).
     - `If-Match` / 412 on PUT and DELETE, and the generation summaries.
 
     Every response is `application/json`. Every error uses the `Error` schema.
@@ -606,14 +606,27 @@ paths:
     get:
       tags: [Readings]
       operationId: listReadings
-      summary: Generation history of one installation
-      description: Currently the whole history as a flat array, newest first. Pagination, sorting, the time window and min-power-kw are planned (ReadingPage). An existing installation with no readings returns 200 [].
+      summary: Generation history of one installation (paginated)
+      description: |
+        One page of the history, newest first, as `{count, next, previous, results}`. `count` is the
+        total across all pages. `next` is null on the last page and `previous` is null on page 1; a page
+        past the end returns empty `results` with `previous` pointing at the last page that has items.
+        Links are relative and canonical (always `page`, `page-size` and `sort`, in that order) and keep
+        every active parameter. An existing installation with no readings returns `count: 0`.
+        Optional time window `[from, to)` on the measurement `timestamp`: `from` inclusive, `to`
+        exclusive, so adjacent windows never count a reading twice. `count` and the links reflect it.
+        A missing installation is 404 before the query values are checked.
+        *(planned)* sort options and min-power-kw.
       parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/IfNoneMatch'
         - $ref: '#/components/parameters/IfModifiedSince'
       responses:
         '200':
-          description: The installation's readings, newest first
+          description: One page of the installation's readings, newest first
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
@@ -621,10 +634,35 @@ paths:
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Reading' }
+              schema: { $ref: '#/components/schemas/ReadingPage' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400':
+          description: |
+            INVALID_QUERY_PARAMETER: page or page-size not a whole number in range (page ≥ 1, page-size 1–100),
+            from or to not a real ISO-8601 date-time with a time zone, or any of them given more than once.
+            Every bad value is reported in one response. INVALID_TIME_WINDOW: from is not earlier than to.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                invalidQueryParameter:
+                  summary: A page-size above the cap and a date without a time zone
+                  value:
+                    code: INVALID_QUERY_PARAMETER
+                    message: One or more query parameters are invalid.
+                    details:
+                      - { field: page-size, location: query, issue: 'Must be a whole number from 1 to 100, given once.', reference: null }
+                      - { field: from, location: query, issue: 'Must be one ISO-8601 date-time with a time zone, e.g. 2026-10-05T00:00:00+05:30 or 2026-10-04T18:30:00Z.', reference: null }
+                    more_info: /api-docs#error-codes
+                invalidTimeWindow:
+                  summary: from is after to
+                  value:
+                    code: INVALID_TIME_WINDOW
+                    message: from must be earlier than to.
+                    details:
+                      - { field: from, location: query, issue: Must be earlier than to (2026-10-06T06:00:00.000Z)., reference: null }
+                      - { field: to, location: query, issue: Must be later than from (2026-10-06T12:00:00.000Z)., reference: null }
+                    more_info: /api-docs#error-codes
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/InstallationNotFound' }
@@ -854,7 +892,7 @@ components:
     From:
       name: from
       in: query
-      description: Readings measured at or after this instant (inclusive). Must include a time zone.
+      description: Readings measured at or after this instant (inclusive). Must include a time zone. Encode + as %2B in a URL (an unencoded + arrives as a space, which is also accepted).
       schema: { type: string, format: date-time, example: '2026-10-05T00:00:00+05:30' }
     To:
       name: to
@@ -889,6 +927,7 @@ components:
     PageSize:
       name: page-size
       in: query
+      description: Items per page. Above 100 is a 400, never silently reduced.
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
     Date:
       name: date
