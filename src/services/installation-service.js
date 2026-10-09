@@ -1,4 +1,6 @@
 const SolarInstallation = require('../models/solar-installation');
+const GridSubstation = require('../models/grid-substation');
+const District = require('../models/district');
 const { ApiError, notFound } = require('../utils/errors');
 const {
   getLastReading,
@@ -32,6 +34,40 @@ async function getInstallationComposite(installationId) {
   const installation = await getInstallation(installationId);
   const lastReading = await getLastReading(installationId);
   return { ...installation.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
+}
+
+// The jurisdiction copies for an installation always come from its substation, never from the
+// client. An unknown substation is a problem with a field in the body (400), not a missing URI (404).
+async function jurisdictionFor(substationId) {
+  const substation = await GridSubstation.findById(substationId);
+  if (!substation) {
+    throw new ApiError(400, 'UNKNOWN_SUBSTATION', `No grid substation with id ${substationId}.`, [
+      { field: 'substation_id', location: 'body', issue: 'No grid substation with this id exists.', reference: null },
+    ]);
+  }
+  const district = await District.findById(substation.district_id);
+  return { district_id: substation.district_id, province_id: district.province_id };
+}
+
+// Registry: a new installation. The unique indexes on _id and meter_id refuse clashes, which is
+// safe even when two requests race; the refusal becomes a 409 naming what was taken.
+async function registerInstallation({ installation_id, ...fields }) {
+  const jurisdiction = await jurisdictionFor(fields.substation_id);
+  try {
+    return await SolarInstallation.create({ _id: installation_id, ...fields, ...jurisdiction });
+  } catch (err) {
+    if (err.code === 11000 && err.keyPattern && err.keyPattern._id) {
+      throw new ApiError(409, 'INSTALLATION_ID_TAKEN', `Installation ${installation_id} is already registered.`, [
+        { field: 'installation_id', location: 'body', issue: 'Already registered.', reference: `/installations/${installation_id}` },
+      ]);
+    }
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.meter_id) {
+      throw new ApiError(409, 'METER_ID_TAKEN', `Meter ${fields.meter_id} is already fitted to another installation.`, [
+        { field: 'meter_id', location: 'body', issue: 'Already used by another installation.', reference: null },
+      ]);
+    }
+    throw err;
+  }
 }
 
 // Every resource under /installations/{installation-id}/ needs its parent to exist first.
@@ -115,6 +151,7 @@ async function duplicateReadingError(installationId, timestamp) {
 }
 
 module.exports = {
+  registerInstallation,
   createReading,
   listInstallations,
   getInstallation,
