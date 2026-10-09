@@ -19,4 +19,23 @@ async function findReading(installationId, readingId) {
   return GenerationReading.findOne({ _id: readingId, installation_id: installationId });
 }
 
-module.exports = { getLastReading, listReadings, findReading };
+// The reading an installation already has at an exact instant (used to point a duplicate at it).
+async function findReadingAt(installationId, timestamp) {
+  return GenerationReading.findOne({ installation_id: installationId, timestamp });
+}
+
+// The installation's readings immediately before and after an instant, by measurement time.
+// Both use the { installation_id, timestamp } index.
+async function findNeighbours(installationId, timestamp) {
+  const [previous, next] = await Promise.all([
+    GenerationReading.findOne({ installation_id: installationId, timestamp: { $lt: timestamp } }).sort({ timestamp: -1 }),
+    GenerationReading.findOne({ installation_id: installationId, timestamp: { $gt: timestamp } }).sort({ timestamp: 1 }),
+  ]);
+  return { previous, next };
+}
+
+async function insertReading(data) {
+  return GenerationReading.create(data);
+}
+
+module.exports = { getLastReading, listReadings, findReading, findReadingAt, findNeighbours, insertReading };
