@@ -41,9 +41,15 @@ info:
     carries `WWW-Authenticate: Bearer realm="slsea-solar-api"`, with `error="invalid_token"` when a token
     was sent but refused. 401 comes before 404, 405 and 406.
 
+    Scopes (403 `INSUFFICIENT_SCOPE`, with `WWW-Authenticate: ... error="insufficient_scope", scope="..."`):
+    every GET needs `analyst-read-by-jurisdiction` (a meter's token reads nothing); posting a reading
+    needs `installation-write`; registering, replacing and deleting installations need `asset-admin`.
+    A meter's token posting to another installation is 403 `INSTALLATION_MISMATCH`. Scope checks come
+    after 401 and 405 and before 404, 412, 415 and 400.
+
     **Documented here but not live yet:**
-    - Scope, installation and jurisdiction checks (403): any valid token currently reaches every
-      guarded route, including a device token on a read route.
+    - Jurisdiction checks (403 `OUTSIDE_JURISDICTION`): a valid read token currently sees every
+      province, district and installation.
 
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.

@@ -131,9 +131,9 @@ describe('a valid token is accepted', () => {
     }
   });
 
-  test('a device token also passes authentication (what it may do is checked in Step 9.5)', async () => {
+  test('a device token passes authentication: refused by scope (403), not as unauthenticated (401)', async () => {
     const signIn = await request(app).post('/auth/tokens').send({ meter_id: 'MTR-000001', device_secret: 'test-device-secret-INS-0001' });
-    expect((await request(app).get('/provinces').set('Authorization', `Bearer ${signIn.body.access_token}`)).status).toBe(200);
+    expect((await request(app).get('/provinces').set('Authorization', `Bearer ${signIn.body.access_token}`)).status).toBe(403);
   });
 });
 

@@ -8,14 +8,19 @@ const {
 const { validateInstallationBody, validateReplacementBody } = require('../../utils/validate-installation');
 const { jsonBody } = require('../../middleware/json-body');
 const { requireDatabase } = require('../../middleware/require-database');
-const { adminAuthPlaceholder } = require('../../middleware/admin-auth-placeholder');
+const { requireScope } = require('../../middleware/authorize');
+const { SCOPES } = require('../../utils/tokens');
 const { strongEtag, httpDate, ifMatchSatisfied } = require('../../utils/http-cache');
 const { ApiError } = require('../../utils/errors');
 
 const router = express.Router();
 
+// Registry writes need the asset-admin scope. Checked first on every write (403 before 404, 412,
+// 415 and 400), so a caller without it learns nothing about the registry.
+const adminOnly = requireScope(SCOPES.ASSET_ADMIN);
+
 // Registry: the admin registers a new installation. The collection is the factory for its members.
-router.post('/', jsonBody, requireDatabase, adminAuthPlaceholder, async (req, res) => {
+router.post('/', adminOnly, jsonBody, requireDatabase, async (req, res) => {
   const fields = validateInstallationBody(req.body, { requireInstallationId: true });
   const installation = await registerInstallation(fields);
 
@@ -47,8 +52,8 @@ async function installationMustMatch(req, res, next) {
 // Registry: replace the whole installation. Every writable field must be sent; nothing is merged.
 router.put(
   '/:installationId',
+  adminOnly,
   requireDatabase,
-  adminAuthPlaceholder,
   installationMustMatch,
   jsonBody,
   async (req, res) => {
@@ -61,7 +66,7 @@ router.put(
 
 // Registry: remove an installation. 200 with what was removed; a second DELETE finds nothing (404).
 // Its readings stay in the database as history.
-router.delete('/:installationId', requireDatabase, adminAuthPlaceholder, installationMustMatch, async (req, res) => {
+router.delete('/:installationId', adminOnly, requireDatabase, installationMustMatch, async (req, res) => {
   res.json(await deleteInstallation(req.params.installationId));
 });
 

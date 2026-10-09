@@ -3,7 +3,8 @@ const { createReading } = require('../../services/installation-service');
 const { validateNewReading } = require('../../utils/validate-reading');
 const { jsonBody } = require('../../middleware/json-body');
 const { requireDatabase } = require('../../middleware/require-database');
-const { deviceAuthPlaceholder } = require('../../middleware/device-auth-placeholder');
+const { requireScope, requireOwnInstallation } = require('../../middleware/authorize');
+const { SCOPES } = require('../../utils/tokens');
 const { strongEtag, httpDate } = require('../../utils/http-cache');
 const { ApiError } = require('../../utils/errors');
 
@@ -11,7 +12,9 @@ const router = express.Router();
 
 // Write path: a meter adds a reading for the installation named in the path.
 // "A collection resource is a factory for its members": POST to the readings collection creates one.
-router.post('/:installationId/readings', jsonBody, requireDatabase, deviceAuthPlaceholder, async (req, res) => {
+// Only a meter's token (installation-write), and only for its own installation: checked first,
+// before the body is read (403 before 415/400), and without the database.
+router.post('/:installationId/readings', requireScope(SCOPES.INSTALLATION_WRITE), requireOwnInstallation, jsonBody, requireDatabase, async (req, res) => {
   const { installationId } = req.params;
   const values = validateNewReading(req.body);
   const reading = await createReading(installationId, values);

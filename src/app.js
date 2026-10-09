@@ -10,6 +10,7 @@ const readingsWriteRouter = require('./routes/write/readings');
 const installationsWriteRouter = require('./routes/write/installations');
 const { acceptJson } = require('./middleware/accept-json');
 const { authenticate } = require('./middleware/authenticate');
+const { requireReadScope } = require('./middleware/authorize');
 const { requireDatabase } = require('./middleware/require-database');
 const { conditionalGet } = require('./middleware/conditional-get');
 const { unknownRoute, errorHandler } = require('./middleware/error-handler');
@@ -52,11 +53,12 @@ app.use(conditionalGet);
 app.use('/installations', readingsWriteRouter);
 app.use('/installations', installationsWriteRouter);
 
-// Read path. Authentication and jurisdiction filtering are added in the security phase.
-app.use('/provinces', requireDatabase, provincesRouter);
-app.use('/districts', requireDatabase, districtsRouter);
-app.use('/grid-substations', requireDatabase, gridSubstationsRouter);
-app.use('/installations', requireDatabase, installationsRouter);
+// Read path: every GET needs the analyst read scope (a meter's token is refused with 403).
+// Jurisdiction filtering is added in Step 9.6.
+app.use('/provinces', requireReadScope, requireDatabase, provincesRouter);
+app.use('/districts', requireReadScope, requireDatabase, districtsRouter);
+app.use('/grid-substations', requireReadScope, requireDatabase, gridSubstationsRouter);
+app.use('/installations', requireReadScope, requireDatabase, installationsRouter);
 
 // Must stay last: unmatched paths, then every error, become the standard error body.
 app.use(unknownRoute);
