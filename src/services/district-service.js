@@ -13,4 +13,11 @@ async function getDistrict(districtId) {
   return district;
 }
 
-module.exports = { listDistricts, getDistrict };
+// For resources under /districts/{district-id}/: checks the id without loading the district.
+async function ensureDistrictExists(districtId) {
+  if (!(await District.exists({ _id: districtId }))) {
+    throw notFound('DISTRICT_NOT_FOUND', `No district with id ${districtId}.`);
+  }
+}
+
+module.exports = { listDistricts, getDistrict, ensureDistrictExists };

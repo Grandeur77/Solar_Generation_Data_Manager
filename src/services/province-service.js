@@ -12,4 +12,11 @@ async function getProvince(provinceId) {
   return province;
 }
 
-module.exports = { listProvinces, getProvince };
+// For resources under /provinces/{province-id}/: checks the id without loading the province.
+async function ensureProvinceExists(provinceId) {
+  if (!(await Province.exists({ _id: provinceId }))) {
+    throw notFound('PROVINCE_NOT_FOUND', `No province with id ${provinceId}.`);
+  }
+}
+
+module.exports = { listProvinces, getProvince, ensureProvinceExists };

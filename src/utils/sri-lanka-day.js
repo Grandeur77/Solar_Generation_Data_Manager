@@ -11,8 +11,9 @@ function sriLankaDay(date) {
 }
 
 // Today's date in Sri Lanka, 'YYYY-MM-DD'. Between 18:30Z and midnight UTC it is already tomorrow.
-function sriLankaToday(now = new Date()) {
-  return new Date(now.getTime() + OFFSET_MS).toISOString().slice(0, 10);
+// now may be a Date or milliseconds; it reads Date.now() so tests can fix "today".
+function sriLankaToday(now = Date.now()) {
+  return new Date(new Date(now).getTime() + OFFSET_MS).toISOString().slice(0, 10);
 }
 
 module.exports = { sriLankaDay, sriLankaToday };

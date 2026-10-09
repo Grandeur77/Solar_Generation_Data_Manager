@@ -30,31 +30,31 @@ describe('current total power against the hand-computed values', () => {
   beforeAll(loadTestSeed);
 
   test('DT-01 on 2026-10-06: 0.5 + 1.0 = 1.5 kW, as of 12:30Z', async () => {
-    expect(await power('DT-01', '2026-10-06')).toEqual({ total_power_kw: 1.5, power_as_of: new Date('2026-10-06T12:30:00Z') });
+    expect(await power('DT-01', '2026-10-06')).toEqual({ total_power_kw: 1.5, power_as_of: new Date('2026-10-06T12:30:00Z'), reporting_installations: 2 });
   });
 
   test('DT-02 on 2026-10-06: 3 kW, as of 06:00Z', async () => {
-    expect(await power('DT-02', '2026-10-06')).toEqual({ total_power_kw: 3, power_as_of: new Date('2026-10-06T06:00:00Z') });
+    expect(await power('DT-02', '2026-10-06')).toEqual({ total_power_kw: 3, power_as_of: new Date('2026-10-06T06:00:00Z'), reporting_installations: 1 });
   });
 
   test('DT-04 on 2026-10-06: an installation that stopped reporting adds nothing → 0, null', async () => {
-    expect(await power('DT-04', '2026-10-06')).toEqual({ total_power_kw: 0, power_as_of: null });
+    expect(await power('DT-04', '2026-10-06')).toEqual({ total_power_kw: 0, power_as_of: null, reporting_installations: 0 });
   });
 
   test('DT-04 on 2026-10-02, the day it did report: 6 kW', async () => {
-    expect(await power('DT-04', '2026-10-02')).toEqual({ total_power_kw: 6, power_as_of: new Date('2026-10-02T06:30:00Z') });
+    expect(await power('DT-04', '2026-10-02')).toEqual({ total_power_kw: 6, power_as_of: new Date('2026-10-02T06:30:00Z'), reporting_installations: 1 });
   });
 
   test('DT-01 on 2026-10-05: the 23:45 Sri Lanka readings (18:15Z) belong to 5 Oct → 0 kW as of 18:15Z', async () => {
-    expect(await power('DT-01', '2026-10-05')).toEqual({ total_power_kw: 0, power_as_of: new Date('2026-10-05T18:15:00Z') });
+    expect(await power('DT-01', '2026-10-05')).toEqual({ total_power_kw: 0, power_as_of: new Date('2026-10-05T18:15:00Z'), reporting_installations: 2 });
   });
 
   test('a day with no readings → 0, null', async () => {
-    expect(await power('DT-01', '2026-10-07')).toEqual({ total_power_kw: 0, power_as_of: null });
+    expect(await power('DT-01', '2026-10-07')).toEqual({ total_power_kw: 0, power_as_of: null, reporting_installations: 0 });
   });
 
   test('an unknown district → 0, null (the 404 belongs to the route)', async () => {
-    expect(await power('DT-99', '2026-10-06')).toEqual({ total_power_kw: 0, power_as_of: null });
+    expect(await power('DT-99', '2026-10-06')).toEqual({ total_power_kw: 0, power_as_of: null, reporting_installations: 0 });
   });
 });
 
@@ -78,7 +78,7 @@ describe('latest means newest by timestamp, and the work happens in MongoDB', ()
       installation_id: 'INS-0001', timestamp: new Date('2026-10-06T12:45:00Z'), power_kw: 0.25, energy_kwh: 1020.1, voltage: 230,
       substation_id: 'SS-001', district_id: 'DT-01', province_id: 'PV-01',
     });
-    expect(await power('DT-01', '2026-10-06')).toEqual({ total_power_kw: 1.25, power_as_of: new Date('2026-10-06T12:45:00Z') });
+    expect(await power('DT-01', '2026-10-06')).toEqual({ total_power_kw: 1.25, power_as_of: new Date('2026-10-06T12:45:00Z'), reporting_installations: 2 });
   });
 
   test('the sum is rounded to 3 dp: 0.1 + 0.2 is 0.3, not 0.30000000000000004', async () => {
