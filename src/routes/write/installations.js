@@ -39,7 +39,8 @@ router.post('/', adminOnly, jsonBody, requireDatabase, async (req, res) => {
 // 412 and nothing changes. That stops one admin silently overwriting another admin's change.
 // The ETag compared is the composite's, the same one GET, POST and PUT return for this URI.
 async function installationMustMatch(req, res, next) {
-  const { body } = await getInstallationComposite(req.params.installationId);
+  // The admin's token is national, so this sees the whole registry.
+  const { body } = await getInstallationComposite(req.params.installationId, req.auth);
   const ifMatch = req.get('If-Match');
   if (ifMatch !== undefined && !ifMatchSatisfied(ifMatch, strongEtag(body))) {
     throw new ApiError(412, 'PRECONDITION_FAILED', 'The installation has changed since you last read it. Fetch it again, then retry.', [

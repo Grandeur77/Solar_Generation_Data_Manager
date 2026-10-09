@@ -47,9 +47,16 @@ info:
     A meter's token posting to another installation is 403 `INSTALLATION_MISMATCH`. Scope checks come
     after 401 and 405 and before 404, 412, 415 and 400.
 
-    **Documented here but not live yet:**
-    - Jurisdiction checks (403 `OUTSIDE_JURISDICTION`): a valid read token currently sees every
-      province, district and installation.
+    Jurisdiction: every read is cut to the caller's jurisdiction (national, one province or one
+    district) inside the database query. Collections with no filter return only the caller's own
+    area; a district user sees no whole province. A filter that overlaps the caller's area is applied
+    (a district user may filter by their own province); one outside it is 403 `OUTSIDE_JURISDICTION`,
+    never an empty list. A filter id that does not exist matches nothing (200, empty). A member outside
+    the jurisdiction is 403 after the 404 check, including the composite, last-known reading, readings
+    and both summaries.
+
+    **Documented here but not live yet:** rate limiting on `POST /auth/tokens` (429) and the other
+    hardening of Step 9.8.
 
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.

@@ -31,7 +31,8 @@ router.get('/', async (req, res) => {
   const { results, count } = await listInstallations(
     { provinceId, districtId, substationId, status },
     // installation_id (stored as _id) is unique, so it breaks ties for equal names or capacities.
-    { skip: (page - 1) * pageSize, limit: pageSize, sort: mongoSort(sortValue, '_id', 1, { installation_id: '_id' }) }
+    { skip: (page - 1) * pageSize, limit: pageSize, sort: mongoSort(sortValue, '_id', 1, { installation_id: '_id' }) },
+    req.auth
   );
 
   // Links keep every active filter and the sort, in a fixed order.
@@ -47,7 +48,7 @@ router.get('/', async (req, res) => {
 
 // Composite: the installation plus its latest reading, so a dashboard needs one request.
 router.get('/:installationId', async (req, res) => {
-  const { body, lastModified } = await getInstallationComposite(req.params.installationId);
+  const { body, lastModified } = await getInstallationComposite(req.params.installationId, req.auth);
   res.locals.lastModified = lastModified;
   res.json(body);
 });
@@ -55,7 +56,7 @@ router.get('/:installationId', async (req, res) => {
 // Processing resource (a noun, not a verb): the latest reading only, for clients that
 // need current output without the installation's details.
 router.get('/:installationId/last-known-reading', async (req, res) => {
-  const reading = await getLastKnownReading(req.params.installationId);
+  const reading = await getLastKnownReading(req.params.installationId, req.auth);
   res.locals.lastModified = reading.received_at;
   res.json(reading);
 });
@@ -89,7 +90,7 @@ function readReadingsQuery(query) {
 // Paged: { count, next, previous, results }, optionally within ?from= / ?to=, sorted by ?sort=.
 router.get('/:installationId/readings', async (req, res) => {
   const { installationId } = req.params;
-  const { page, pageSize, window, minPowerKw, sortValue, results, count } = await listInstallationReadings(installationId, () =>
+  const { page, pageSize, window, minPowerKw, sortValue, results, count } = await listInstallationReadings(installationId, req.auth, () =>
     readReadingsQuery(req.query)
   );
 
@@ -106,7 +107,7 @@ router.get('/:installationId/readings', async (req, res) => {
 
 // The member is what a 201 Location header will point to once readings can be created.
 router.get('/:installationId/readings/:readingId', async (req, res) => {
-  const reading = await getInstallationReading(req.params.installationId, req.params.readingId);
+  const reading = await getInstallationReading(req.params.installationId, req.params.readingId, req.auth);
   // A reading never changes after it is stored, so received_at is its last change.
   res.locals.lastModified = reading.received_at;
   res.json(reading);

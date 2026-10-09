@@ -10,12 +10,12 @@ router.get('/', async (req, res) => {
   const provinceId = readIdParam(req.query, 'province-id', /^PV-\d{2}$/, 'PV-01', problems);
   const districtId = readIdParam(req.query, 'district-id', /^DT-\d{2}$/, 'DT-01', problems);
   throwIfInvalid(problems);
-  const substations = await listGridSubstations({ provinceId, districtId });
+  const substations = await listGridSubstations({ provinceId, districtId }, req.auth);
   res.json(substations);
 });
 
 router.get('/:substationId', async (req, res) => {
-  const substation = await getGridSubstation(req.params.substationId);
+  const substation = await getGridSubstation(req.params.substationId, req.auth);
   res.locals.lastModified = substation.updated_at;
   res.json(substation);
 });

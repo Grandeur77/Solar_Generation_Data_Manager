@@ -13,16 +13,27 @@ const {
 } = require('./reading-service');
 const { plausibilityProblems } = require('../utils/reading-rules');
 const { newest } = require('../utils/http-cache');
+const { jurisdictionFilter, checkFilter, checkMember } = require('./jurisdiction-service');
 
-// Filters combine (AND). Installations carry copies of their district and province ids,
-// so every filter is a direct, indexed match with no lookup through the substation.
-// One page plus the total across all pages.
-async function listInstallations({ provinceId, districtId, substationId, status } = {}, { skip = 0, limit = 0, sort = { _id: 1 } } = {}) {
-  const filter = {};
-  if (provinceId) filter.province_id = provinceId;
-  if (districtId) filter.district_id = districtId;
-  if (substationId) filter.substation_id = substationId;
-  if (status) filter.status = status;
+// Registry writes need the asset-admin scope, and only the registry admin has it, who is always
+// national (the User model enforces it). Their reads of the latest reading say so explicitly.
+const WHOLE_REGISTRY = {};
+
+// Filters combine (AND), and each must overlap the caller's jurisdiction (403 otherwise).
+// Installations carry copies of their district and province ids, so the jurisdiction and every
+// filter are direct, indexed matches with no lookup through the substation. $and keeps them apart,
+// so a filter can never overwrite the jurisdiction. One page plus the total across all pages.
+async function listInstallations({ provinceId, districtId, substationId, status } = {}, { skip = 0, limit = 0, sort = { _id: 1 } } = {}, auth) {
+  if (provinceId) await checkFilter(auth, 'province', provinceId, 'province-id');
+  if (districtId) await checkFilter(auth, 'district', districtId, 'district-id');
+  if (substationId) await checkFilter(auth, 'substation', substationId, 'substation-id');
+
+  const conditions = [jurisdictionFilter(auth)];
+  if (provinceId) conditions.push({ province_id: provinceId });
+  if (districtId) conditions.push({ district_id: districtId });
+  if (substationId) conditions.push({ substation_id: substationId });
+  if (status) conditions.push({ status });
+  const filter = { $and: conditions };
   const [results, count] = await Promise.all([
     SolarInstallation.find(filter).sort(sort).skip(skip).limit(limit),
     SolarInstallation.countDocuments(filter),
@@ -30,18 +41,27 @@ async function listInstallations({ provinceId, districtId, substationId, status 
   return { results, count };
 }
 
+// Write path only (a meter's reading): the meter's own installation, no jurisdiction involved.
 async function getInstallation(installationId) {
   const installation = await SolarInstallation.findById(installationId);
   if (!installation) throw notFound('INSTALLATION_NOT_FOUND', `No installation with id ${installationId}.`);
   return installation;
 }
 
+// Read path: 404 if it doesn't exist, then 403 if it is outside the caller's jurisdiction.
+// Everything under /installations/{installation-id} starts here.
+async function getReadableInstallation(installationId, auth) {
+  const installation = await getInstallation(installationId);
+  checkMember(auth, { province_id: installation.province_id, district_id: installation.district_id }, 'installation', 'installation-id');
+  return installation;
+}
+
 // The composite: the installation's own fields plus exactly one nested reading (or null).
 // Never the history, and never flat last_* fields copied onto the installation.
 // lastModified is the later of the installation's own change and its latest reading's arrival.
-async function getInstallationComposite(installationId) {
-  const installation = await getInstallation(installationId);
-  const lastReading = await getLastReading(installationId);
+async function getInstallationComposite(installationId, auth) {
+  const installation = await getReadableInstallation(installationId, auth);
+  const lastReading = await getLastReading(installationId, jurisdictionFilter(auth));
   const body = { ...installation.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
   const lastModified = newest([installation.updated_at, lastReading && lastReading.received_at]);
   return { body, lastModified };
@@ -101,23 +121,15 @@ async function replaceInstallation(installationId, fields) {
   } catch (err) {
     throw meterTakenOr(err, fields.meter_id);
   }
-  const lastReading = await getLastReading(installationId);
+  const lastReading = await getLastReading(installationId, WHOLE_REGISTRY);
   return { installation: existing, body: { ...existing.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null } };
-}
-
-// Every resource under /installations/{installation-id}/ needs its parent to exist first.
-// exists() checks the id without loading the whole installation document.
-async function ensureInstallationExists(installationId) {
-  if (!(await SolarInstallation.exists({ _id: installationId }))) {
-    throw notFound('INSTALLATION_NOT_FOUND', `No installation with id ${installationId}.`);
-  }
 }
 
 // The processing resource: only the latest reading, no installation metadata.
 // Two different 404s, so a client can tell "no such site" from "site not reporting yet".
-async function getLastKnownReading(installationId) {
-  await ensureInstallationExists(installationId);
-  const reading = await getLastReading(installationId);
+async function getLastKnownReading(installationId, auth) {
+  await getReadableInstallation(installationId, auth);
+  const reading = await getLastReading(installationId, jurisdictionFilter(auth));
   if (!reading) {
     throw notFound('NO_READINGS_YET', `Installation ${installationId} has not reported any readings yet.`);
   }
@@ -128,18 +140,19 @@ async function getLastKnownReading(installationId) {
 // The parent must exist first (404), and only then are the query values checked (400),
 // following the design's check order. `parseQuery` reads page, page-size, the time window and sort;
 // what it parsed is returned alongside the results so the route can build the page links.
-async function listInstallationReadings(installationId, parseQuery) {
-  await ensureInstallationExists(installationId);
+async function listInstallationReadings(installationId, auth, parseQuery) {
+  await getReadableInstallation(installationId, auth);
   const query = parseQuery();
   const { page, pageSize, timestamp, minPowerKw, sort } = query;
-  const { results, count } = await listReadings(installationId, { skip: (page - 1) * pageSize, limit: pageSize, timestamp, minPowerKw, sort });
+  const scope = jurisdictionFilter(auth);
+  const { results, count } = await listReadings(installationId, { skip: (page - 1) * pageSize, limit: pageSize, timestamp, minPowerKw, sort, scope });
   return { ...query, results, count };
 }
 
 // Scoped member: the reading must belong to this installation.
-async function getInstallationReading(installationId, readingId) {
-  await ensureInstallationExists(installationId);
-  const reading = await findReading(installationId, readingId);
+async function getInstallationReading(installationId, readingId, auth) {
+  await getReadableInstallation(installationId, auth);
+  const reading = await findReading(installationId, readingId, jurisdictionFilter(auth));
   if (!reading) {
     throw notFound('READING_NOT_FOUND', `Installation ${installationId} has no reading with id ${readingId}.`);
   }
@@ -211,13 +224,12 @@ async function duplicateReadingError(installationId, timestamp) {
 async function deleteInstallation(installationId) {
   const removed = await SolarInstallation.findOneAndDelete({ _id: installationId });
   if (!removed) throw notFound('INSTALLATION_NOT_FOUND', `No installation with id ${installationId}.`);
-  const lastReading = await getLastReading(installationId);
+  const lastReading = await getLastReading(installationId, WHOLE_REGISTRY);
   return { ...removed.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
 }
 
 module.exports = {
   deleteInstallation,
-  ensureInstallationExists,
   replaceInstallation,
   registerInstallation,
   createReading,

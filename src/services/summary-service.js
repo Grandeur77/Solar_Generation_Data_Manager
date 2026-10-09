@@ -1,6 +1,7 @@
 const GenerationReading = require('../models/generation-reading');
 const SolarInstallation = require('../models/solar-installation');
 const { sriLankaDay } = require('../utils/sri-lanka-day');
+const { jurisdictionFilter } = require('../utils/jurisdiction');
 
 // Every function here takes a scope, { district_id } or { province_id }, so the district and
 // province summaries share one calculation and can never disagree about how a figure is worked out.
@@ -137,14 +138,19 @@ async function generationSummary(scope, date) {
   };
 }
 
-const districtGenerationSummary = async (districtId, date) => ({
+// The route has already checked the district or province is inside the caller's jurisdiction
+// (403 otherwise); the jurisdiction filter is still merged into every pipeline's $match, so the
+// figures can only ever be built from readings and installations the caller may see.
+const scoped = (area, auth) => ({ $and: [area, jurisdictionFilter(auth)] });
+
+const districtGenerationSummary = async (districtId, date, auth) => ({
   district_id: districtId,
-  ...(await generationSummary({ district_id: districtId }, date)),
+  ...(await generationSummary(scoped({ district_id: districtId }, auth), date)),
 });
 
-const provinceGenerationSummary = async (provinceId, date) => ({
+const provinceGenerationSummary = async (provinceId, date, auth) => ({
   province_id: provinceId,
-  ...(await generationSummary({ province_id: provinceId }, date)),
+  ...(await generationSummary(scoped({ province_id: provinceId }, auth), date)),
 });
 
 module.exports = {
