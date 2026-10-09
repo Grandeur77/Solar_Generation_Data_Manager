@@ -17,18 +17,25 @@ info:
     PUT, PATCH and DELETE on a reading or on the readings collection return 405 with `Allow`.
     Registry: `POST /installations` (201 with `Location`, `ETag` and `Last-Modified`; 409 when
     the installation or meter id is taken), `PUT /installations/{installation-id}` (whole-document
-    replacement, never a merge; PATCH returns 405) and `DELETE` (200, then 404; readings are kept).
+    replacement, never a merge; PATCH returns 405) and `DELETE` (200, then 404; readings are kept),
+    both honouring `If-Match` (a stale ETag → 412).
+    `/installations` and the readings history are paginated and sortable; installations filter by
+    jurisdiction and `status`, readings by time window and `min-power-kw`.
+    Conditional GET on every resource: a strong `ETag`, `Cache-Control: private, no-cache` and
+    `Vary: Accept, Authorization` on each successful GET; `If-None-Match` (which wins) matching the
+    current version → 304 with an empty body. Single resources also send `Last-Modified` and honour
+    `If-Modified-Since`. Collections and pages send no `Last-Modified`: when a member leaves the list
+    (a DELETE, or a PUT moving it out of a filter) no remaining member changes, so no date would
+    advance. They are revalidated by `ETag` only, which changes whenever the body does.
 
     **Documented here but not live yet** (operations marked *(planned)*, plus):
     - Authentication: every route is currently public, including reading ingestion and the
       registry (temporary placeholders let every request through); 401 and 403 arrive with the
       security phase.
-    - Conditional GET on reads: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers.
-    - Pagination, sorting, time-window and status filters on installations and readings: both
-      collections currently return a flat array.
-    - `If-Match` / 412 on PUT and DELETE, and the generation summaries.
+    - The generation summaries.
 
-    Every response is `application/json`. Every error uses the `Error` schema.
+    Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
+    or `Last-Modified`, and is sent with `Cache-Control: no-store`.
     A well-formed filter value that matches nothing returns `200 []`; a malformed one returns 400.
 
     ## Error codes
@@ -106,7 +113,6 @@ paths:
           description: Provinces (flat array, not paginated)
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -191,7 +197,6 @@ paths:
           description: Districts (flat array, not paginated)
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -278,7 +283,6 @@ paths:
           description: Grid substations (flat array, not paginated)
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -325,29 +329,55 @@ paths:
     get:
       tags: [Installations]
       operationId: listInstallations
-      summary: List installations in the caller's jurisdiction
-      description: Currently a flat array in installation_id order. Pagination, sorting and the status filter are planned (InstallationPage).
+      summary: List installations in the caller's jurisdiction (paginated)
+      description: |
+        One page as `{count, next, previous, results}`, items in the plain shape (no last_reading).
+        Filters combine (AND); every malformed filter or page value is reported in one 400, then the
+        sort is checked. Links keep every filter and the sort. Ties are ordered by installation_id.
       parameters:
         - $ref: '#/components/parameters/ProvinceIdFilter'
         - $ref: '#/components/parameters/DistrictIdFilter'
         - $ref: '#/components/parameters/SubstationIdFilter'
+        - $ref: '#/components/parameters/Status'
+        - $ref: '#/components/parameters/InstallationSort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/IfNoneMatch'
         - $ref: '#/components/parameters/IfModifiedSince'
       responses:
         '200':
-          description: Installations (plain shape, no last_reading)
+          description: One page of installations (plain shape, no last_reading)
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Installation' }
+              schema: { $ref: '#/components/schemas/InstallationPage' }
         '304': { $ref: '#/components/responses/NotModified' }
-        '400': { $ref: '#/components/responses/InvalidQueryParameter' }
+        '400':
+          description: INVALID_QUERY_PARAMETER (a malformed filter, status or page value; all reported at once) or INVALID_SORT_FIELD (reference lists installation_id, name, capacity_kw)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                invalidQueryParameter:
+                  summary: Two malformed values reported together
+                  value:
+                    code: INVALID_QUERY_PARAMETER
+                    message: One or more query parameters are invalid.
+                    details:
+                      - { field: district-id, location: query, issue: 'Must match DT-01, given once.', reference: null }
+                      - { field: status, location: query, issue: 'Must be one of: active, inactive, given once.', reference: null }
+                    more_info: /api-docs#error-codes
+                invalidSortField:
+                  summary: sort names a field installations cannot be sorted by
+                  value:
+                    code: INVALID_SORT_FIELD
+                    message: The sort field is not supported.
+                    details:
+                      - { field: sort, location: query, issue: 'Use one allowed field, prefixed with - for descending, given once.', reference: 'installation_id, name, capacity_kw' }
+                    more_info: /api-docs#error-codes
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
@@ -466,7 +496,8 @@ paths:
         (otherwise 400 ID_MISMATCH). `district_id` and `province_id` are recalculated from the
         substation. The meter's credential and `created_at` are kept; readings keep the jurisdiction
         they were recorded under. Registry-admin authentication is a placeholder for now.
-        *(planned)* `If-Match` with a stale ETag → 412.
+        Optional `If-Match`: the ETag last received for this installation (from GET, POST or PUT). A stale one
+        → 412 and nothing changes; checked after the 404 and before the body.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -545,7 +576,8 @@ paths:
         There is no cascade: the installation's readings stay in the database as the record of what
         was generated, still counted under the district they were recorded in. Because their parent
         no longer exists, the scoped readings URIs then return 404.
-        Registry-admin authentication is a placeholder for now. *(planned)* `If-Match` with a stale ETag → 412.
+        Registry-admin authentication is a placeholder for now.
+        Optional `If-Match`: a stale ETag → 412 and nothing is deleted; checked after the 404.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       responses:
@@ -606,25 +638,76 @@ paths:
     get:
       tags: [Readings]
       operationId: listReadings
-      summary: Generation history of one installation
-      description: Currently the whole history as a flat array, newest first. Pagination, sorting, the time window and min-power-kw are planned (ReadingPage). An existing installation with no readings returns 200 [].
+      summary: Generation history of one installation (paginated)
+      description: |
+        One page of the history, newest first, as `{count, next, previous, results}`. `count` is the
+        total across all pages. `next` is null on the last page and `previous` is null on page 1; a page
+        past the end returns empty `results` with `previous` pointing at the last page that has items.
+        Links are relative and canonical (always `page`, `page-size` and `sort`, in that order) and keep
+        every active parameter. An existing installation with no readings returns `count: 0`.
+        Optional time window `[from, to)` on the measurement `timestamp`: `from` inclusive, `to`
+        exclusive, so adjacent windows never count a reading twice. `count` and the links reflect it.
+        Sorted by `sort` (default `-timestamp`, newest first); equal values are ordered newest first,
+        so pages never repeat or skip readings.
+        A missing installation is 404 before the query values are checked.
+        Optional `min-power-kw`: only readings with power_kw at or above it.
       parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/MinPowerKw'
+        - $ref: '#/components/parameters/ReadingSort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/IfNoneMatch'
         - $ref: '#/components/parameters/IfModifiedSince'
       responses:
         '200':
-          description: The installation's readings, newest first
+          description: One page of the installation's readings, newest first
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Reading' }
+              schema: { $ref: '#/components/schemas/ReadingPage' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400':
+          description: |
+            INVALID_QUERY_PARAMETER: page or page-size not a whole number in range (page ≥ 1, page-size 1–100),
+            from or to not a real ISO-8601 date-time with a time zone, or any of them given more than once.
+            Every bad value is reported in one response. INVALID_SORT_FIELD: sort is not exactly one of
+            the allowed fields (reference lists them). INVALID_TIME_WINDOW: from is not earlier than to.
+            Checked in that order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                invalidQueryParameter:
+                  summary: A page-size above the cap and a date without a time zone
+                  value:
+                    code: INVALID_QUERY_PARAMETER
+                    message: One or more query parameters are invalid.
+                    details:
+                      - { field: page-size, location: query, issue: 'Must be a whole number from 1 to 100, given once.', reference: null }
+                      - { field: from, location: query, issue: 'Must be one ISO-8601 date-time with a time zone, e.g. 2026-10-05T00:00:00+05:30 or 2026-10-04T18:30:00Z.', reference: null }
+                    more_info: /api-docs#error-codes
+                invalidSortField:
+                  summary: sort names a field that cannot be sorted on
+                  value:
+                    code: INVALID_SORT_FIELD
+                    message: The sort field is not supported.
+                    details:
+                      - { field: sort, location: query, issue: 'Use one allowed field, prefixed with - for descending, given once.', reference: 'timestamp, power_kw, energy_kwh' }
+                    more_info: /api-docs#error-codes
+                invalidTimeWindow:
+                  summary: from is after to
+                  value:
+                    code: INVALID_TIME_WINDOW
+                    message: from must be earlier than to.
+                    details:
+                      - { field: from, location: query, issue: Must be earlier than to (2026-10-06T06:00:00.000Z)., reference: null }
+                      - { field: to, location: query, issue: Must be later than from (2026-10-06T12:00:00.000Z)., reference: null }
+                    more_info: /api-docs#error-codes
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/InstallationNotFound' }
@@ -850,11 +933,12 @@ components:
     Status:
       name: status
       in: query
+      description: Only installations with this status. Any other value, or the parameter given twice → 400.
       schema: { type: string, enum: [active, inactive] }
     From:
       name: from
       in: query
-      description: Readings measured at or after this instant (inclusive). Must include a time zone.
+      description: Readings measured at or after this instant (inclusive). Must include a time zone. Encode + as %2B in a URL (an unencoded + arrives as a space, which is also accepted).
       schema: { type: string, format: date-time, example: '2026-10-05T00:00:00+05:30' }
     To:
       name: to
@@ -864,12 +948,12 @@ components:
     MinPowerKw:
       name: min-power-kw
       in: query
-      description: Only readings with power_kw at or above this value
+      description: Only readings with power_kw at or above this value (inclusive). A plain decimal number ≥ 0; anything else → 400.
       schema: { type: number, minimum: 0, example: 1.5 }
     ReadingSort:
       name: sort
       in: query
-      description: One field; prefix with - for descending.
+      description: One field, written as in the JSON; prefix with - for descending. Ties are ordered newest first. Anything else → 400 INVALID_SORT_FIELD.
       schema:
         type: string
         enum: [timestamp, -timestamp, power_kw, -power_kw, energy_kwh, -energy_kwh]
@@ -877,7 +961,7 @@ components:
     InstallationSort:
       name: sort
       in: query
-      description: One field; prefix with - for descending.
+      description: One field, written as in the JSON; prefix with - for descending. Ties are ordered by installation_id. Anything else → 400 INVALID_SORT_FIELD.
       schema:
         type: string
         enum: [installation_id, -installation_id, name, -name, capacity_kw, -capacity_kw]
@@ -889,6 +973,7 @@ components:
     PageSize:
       name: page-size
       in: query
+      description: Items per page. Above 100 is a 400, never silently reduced.
       schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
     Date:
       name: date
@@ -908,7 +993,7 @@ components:
     IfMatch:
       name: If-Match
       in: header
-      description: The ETag the client last received for this installation. A mismatch returns 412.
+      description: Optional. The ETag the client last received for this installation (from GET, POST or PUT), a comma-separated list of them, or * for any existing installation. Strong comparison, so W/ tags never match. A mismatch returns 412 and nothing changes.
       schema: { type: string, example: '"a3f9c2d1"' }
 
   headers:
@@ -916,7 +1001,7 @@ components:
       description: Strong validator, a quoted hash of the response body
       schema: { type: string, example: '"a3f9c2d1"' }
     LastModified:
-      description: When the representation last changed
+      description: When the representation last changed. Sent on single resources only, never on a collection or page.
       schema: { type: string, example: 'Tue, 06 Oct 2026 04:30:04 GMT' }
     Location:
       description: URI of the created resource. It resolves with GET.
@@ -936,7 +1021,7 @@ components:
 
   responses:
     NotModified:
-      description: The client's copy is current. No body.
+      description: The client's copy is current. No body. Last-Modified is present only for single resources.
       headers:
         ETag: { $ref: '#/components/headers/ETag' }
         Last-Modified: { $ref: '#/components/headers/LastModified' }
@@ -975,10 +1060,16 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     PreconditionFailed:
-      description: If-Match does not match the current ETag
+      description: PRECONDITION_FAILED. If-Match does not match the installation's current ETag (strong comparison; W/ tags never match). Nothing was changed.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example:
+            code: PRECONDITION_FAILED
+            message: The installation has changed since you last read it. Fetch it again, then retry.
+            details:
+              - { field: If-Match, location: header, issue: Does not match the current ETag of this installation., reference: null }
+            more_info: /api-docs#error-codes
     PayloadTooLarge:
       description: The request body is over 100 KB
       content:

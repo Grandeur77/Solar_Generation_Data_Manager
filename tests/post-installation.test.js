@@ -62,7 +62,7 @@ describe('POST /installations — success', () => {
   test('the new installation appears in the filtered collection by its derived district', async () => {
     await post(NEW);
     const res = await request(app).get('/installations?district-id=DT-02');
-    expect(res.body.map((i) => i.installation_id)).toEqual(['INS-0003', 'INS-0006']);
+    expect(res.body.results.map((i) => i.installation_id)).toEqual(['INS-0003', 'INS-0006']);
   });
 
   test('district_id and province_id are derived from the substation (a Kandy substation gives DT-04 / PV-02)', async () => {

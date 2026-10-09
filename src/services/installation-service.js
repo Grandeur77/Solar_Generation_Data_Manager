@@ -11,15 +11,22 @@ const {
   insertReading,
 } = require('./reading-service');
 const { plausibilityProblems } = require('../utils/reading-rules');
+const { newest } = require('../utils/http-cache');
 
 // Filters combine (AND). Installations carry copies of their district and province ids,
 // so every filter is a direct, indexed match with no lookup through the substation.
-async function listInstallations({ provinceId, districtId, substationId } = {}) {
+// One page plus the total across all pages.
+async function listInstallations({ provinceId, districtId, substationId, status } = {}, { skip = 0, limit = 0, sort = { _id: 1 } } = {}) {
   const filter = {};
   if (provinceId) filter.province_id = provinceId;
   if (districtId) filter.district_id = districtId;
   if (substationId) filter.substation_id = substationId;
-  return SolarInstallation.find(filter).sort({ _id: 1 });
+  if (status) filter.status = status;
+  const [results, count] = await Promise.all([
+    SolarInstallation.find(filter).sort(sort).skip(skip).limit(limit),
+    SolarInstallation.countDocuments(filter),
+  ]);
+  return { results, count };
 }
 
 async function getInstallation(installationId) {
@@ -30,10 +37,13 @@ async function getInstallation(installationId) {
 
 // The composite: the installation's own fields plus exactly one nested reading (or null).
 // Never the history, and never flat last_* fields copied onto the installation.
+// lastModified is the later of the installation's own change and its latest reading's arrival.
 async function getInstallationComposite(installationId) {
   const installation = await getInstallation(installationId);
   const lastReading = await getLastReading(installationId);
-  return { ...installation.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
+  const body = { ...installation.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
+  const lastModified = newest([installation.updated_at, lastReading && lastReading.received_at]);
+  return { body, lastModified };
 }
 
 // The jurisdiction copies for an installation always come from its substation, never from the
@@ -114,9 +124,15 @@ async function getLastKnownReading(installationId) {
 }
 
 // Scoped collection: a missing parent is 404, an existing parent with no readings is 200 [].
-async function listInstallationReadings(installationId) {
+// The parent must exist first (404), and only then are the query values checked (400),
+// following the design's check order. `parseQuery` reads page, page-size, the time window and sort;
+// what it parsed is returned alongside the results so the route can build the page links.
+async function listInstallationReadings(installationId, parseQuery) {
   await ensureInstallationExists(installationId);
-  return listReadings(installationId);
+  const query = parseQuery();
+  const { page, pageSize, timestamp, minPowerKw, sort } = query;
+  const { results, count } = await listReadings(installationId, { skip: (page - 1) * pageSize, limit: pageSize, timestamp, minPowerKw, sort });
+  return { ...query, results, count };
 }
 
 // Scoped member: the reading must belong to this installation.

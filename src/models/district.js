@@ -11,7 +11,9 @@ const districtSchema = new mongoose.Schema(
   {
     collection: 'districts',
     autoIndex: false,
-    toJSON: toJsonOptions('district_id'),
+    // When the record was loaded or last changed: the source of its Last-Modified header.
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    toJSON: toJsonOptions('district_id', ['created_at', 'updated_at']),
   }
 );
 

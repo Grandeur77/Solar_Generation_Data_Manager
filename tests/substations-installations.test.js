@@ -11,7 +11,9 @@ const { expectErrorBody } = require('./helpers/expect-error');
 beforeAll(setUpTestDatabase);
 afterAll(tearDownTestDatabase);
 
-const ids = (res, field) => res.body.map((item) => item[field]);
+// Substations are a flat array; installations are paged since Step 7.4, so their items are in results.
+const items = (res) => (Array.isArray(res.body) ? res.body : res.body.results);
+const ids = (res, field) => items(res).map((item) => item[field]);
 const get = (path) => request(app).get(path);
 
 // The plain atomic shape, exactly: the fixture record with commissioned_at as stored (ISO with ms).
@@ -83,8 +85,8 @@ describe('GET /installations', () => {
 
   test('items use the plain atomic shape: no last_reading, no secret hash, no change times', async () => {
     const res = await get('/installations');
-    expect(res.body[0]).toEqual(expectedInstallation('INS-0001'));
-    for (const item of res.body) {
+    expect(res.body.results[0]).toEqual(expectedInstallation('INS-0001'));
+    for (const item of res.body.results) {
       expect(item).not.toHaveProperty('last_reading');
       expect(item).not.toHaveProperty('device_secret_hash');
       expect(item).not.toHaveProperty('created_at');
@@ -110,10 +112,10 @@ describe('GET /installations', () => {
     ['a substation outside the district', 'district-id=DT-02&substation-id=SS-001'],
     ['a district outside the province', 'province-id=PV-02&district-id=DT-01'],
     ['a well-formed but unknown substation', 'substation-id=SS-999'],
-  ])('%s → 200 []', async (label, query) => {
+  ])('%s → 200 with no results', async (label, query) => {
     const res = await get(`/installations?${query}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.body).toMatchObject({ count: 0, results: [] });
   });
 
   test.each(['province-id=PV1', 'district-id=DT-001', 'substation-id=SS-01', 'substation-id=SS-001&substation-id=SS-002'])(
@@ -145,10 +147,11 @@ describe('empty collections', () => {
   test('no substations and no installations → 200 [] for both', async () => {
     await SolarInstallation.deleteMany({});
     await GridSubstation.deleteMany({});
-    for (const path of ['/grid-substations', '/installations']) {
-      const res = await get(path);
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
-    }
+    const substations = await get('/grid-substations');
+    expect(substations.status).toBe(200);
+    expect(substations.body).toEqual([]);
+    const installations = await get('/installations');
+    expect(installations.status).toBe(200);
+    expect(installations.body).toEqual({ count: 0, next: null, previous: null, results: [] });
   });
 });

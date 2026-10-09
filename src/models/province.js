@@ -11,7 +11,9 @@ const provinceSchema = new mongoose.Schema(
     collection: 'provinces',
     // Indexes are built once by scripts/setup-db.js, not on every serverless cold start.
     autoIndex: false,
-    toJSON: toJsonOptions('province_id'),
+    // When the record was loaded or last changed: the source of its Last-Modified header.
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    toJSON: toJsonOptions('province_id', ['created_at', 'updated_at']),
   }
 );
 

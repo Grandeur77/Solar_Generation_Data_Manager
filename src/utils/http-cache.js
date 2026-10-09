@@ -11,4 +11,22 @@ function httpDate(date) {
   return new Date(date).toUTCString();
 }
 
-module.exports = { strongEtag, httpDate };
+// The latest of several change times (Dates or undefined), or undefined if none is known.
+// Used for the installation composite (installation change vs latest reading). Not used for
+// collections: a removed member would not move the date (see conditional-get.js).
+function newest(dates) {
+  const times = dates.filter(Boolean).map((d) => new Date(d).getTime());
+  return times.length > 0 ? new Date(Math.max(...times)) : undefined;
+}
+
+// RFC 9110 If-Match uses STRONG comparison: a weak W/"…" tag never matches, "*" matches any
+// current representation, and a list matches if any entry equals the current ETag.
+function ifMatchSatisfied(header, currentEtag) {
+  if (header.trim() === '*') return true;
+  return header
+    .split(',')
+    .map((tag) => tag.trim())
+    .some((tag) => !tag.startsWith('W/') && tag === currentEtag);
+}
+
+module.exports = { strongEtag, httpDate, newest, ifMatchSatisfied };

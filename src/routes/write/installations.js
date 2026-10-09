@@ -3,13 +3,13 @@ const {
   registerInstallation,
   replaceInstallation,
   deleteInstallation,
-  ensureInstallationExists,
+  getInstallationComposite,
 } = require('../../services/installation-service');
 const { validateInstallationBody, validateReplacementBody } = require('../../utils/validate-installation');
 const { jsonBody } = require('../../middleware/json-body');
 const { requireDatabase } = require('../../middleware/require-database');
 const { adminAuthPlaceholder } = require('../../middleware/admin-auth-placeholder');
-const { strongEtag, httpDate } = require('../../utils/http-cache');
+const { strongEtag, httpDate, ifMatchSatisfied } = require('../../utils/http-cache');
 const { ApiError } = require('../../utils/errors');
 
 const router = express.Router();
@@ -29,9 +29,18 @@ router.post('/', jsonBody, requireDatabase, adminAuthPlaceholder, async (req, re
     .json(body);
 });
 
-// PUT never creates: a missing installation is 404, checked before the body is looked at.
-async function installationMustExist(req, res, next) {
-  await ensureInstallationExists(req.params.installationId);
+// Runs before the body is read, in the design's order. 1) A missing installation is 404 (PUT never
+// creates). 2) If-Match (optional): the ETag the admin last saw must still be the current one, or
+// 412 and nothing changes. That stops one admin silently overwriting another admin's change.
+// The ETag compared is the composite's, the same one GET, POST and PUT return for this URI.
+async function installationMustMatch(req, res, next) {
+  const { body } = await getInstallationComposite(req.params.installationId);
+  const ifMatch = req.get('If-Match');
+  if (ifMatch !== undefined && !ifMatchSatisfied(ifMatch, strongEtag(body))) {
+    throw new ApiError(412, 'PRECONDITION_FAILED', 'The installation has changed since you last read it. Fetch it again, then retry.', [
+      { field: 'If-Match', location: 'header', issue: 'Does not match the current ETag of this installation.', reference: null },
+    ]);
+  }
   next();
 }
 
@@ -40,7 +49,7 @@ router.put(
   '/:installationId',
   requireDatabase,
   adminAuthPlaceholder,
-  installationMustExist,
+  installationMustMatch,
   jsonBody,
   async (req, res) => {
     const { installationId } = req.params;
@@ -52,7 +61,7 @@ router.put(
 
 // Registry: remove an installation. 200 with what was removed; a second DELETE finds nothing (404).
 // Its readings stay in the database as history.
-router.delete('/:installationId', requireDatabase, adminAuthPlaceholder, async (req, res) => {
+router.delete('/:installationId', requireDatabase, adminAuthPlaceholder, installationMustMatch, async (req, res) => {
   res.json(await deleteInstallation(req.params.installationId));
 });
 

@@ -1,8 +1,7 @@
 const { ApiError } = require('./errors');
+const { parseInstant } = require('./iso-time');
 
 const ALLOWED = ['timestamp', 'power_kw', 'energy_kwh', 'voltage'];
-// ISO-8601 date-time that states its time zone (Z or +05:30), so the instant is unambiguous.
-const ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
 
 const detail = (field, issue) => ({ field, location: 'body', issue, reference: null });
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -27,7 +26,7 @@ function validateNewReading(body) {
 
   const { timestamp, power_kw, energy_kwh, voltage } = body;
   if (timestamp === undefined) problems.push(detail('timestamp', 'Required.'));
-  else if (typeof timestamp !== 'string' || !ISO_WITH_ZONE.test(timestamp) || Number.isNaN(Date.parse(timestamp))) {
+  else if (!parseInstant(timestamp)) {
     problems.push(detail('timestamp', 'Must be an ISO-8601 date-time with a time zone, e.g. 2026-10-06T04:30:00Z.'));
   }
   if (power_kw === undefined) problems.push(detail('power_kw', 'Required.'));

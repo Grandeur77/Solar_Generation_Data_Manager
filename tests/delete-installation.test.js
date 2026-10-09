@@ -29,7 +29,7 @@ describe('1. the first DELETE → 200 with what was removed', () => {
     expectErrorBody(await request(app).get('/installations/INS-0001'), 404, 'INSTALLATION_NOT_FOUND');
     expectErrorBody(await request(app).get('/installations/INS-0001/last-known-reading'), 404, 'INSTALLATION_NOT_FOUND');
     const list = await request(app).get('/installations');
-    expect(list.body.map((i) => i.installation_id)).not.toContain('INS-0001');
+    expect(list.body.results.map((i) => i.installation_id)).not.toContain('INS-0001');
     expect(await SolarInstallation.findById('INS-0001')).toBeNull();
   });
 

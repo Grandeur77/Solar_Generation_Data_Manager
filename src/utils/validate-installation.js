@@ -1,4 +1,5 @@
 const { ApiError } = require('./errors');
+const { parseInstant } = require('./iso-time');
 
 const WRITABLE = ['name', 'meter_id', 'substation_id', 'capacity_kw', 'status', 'commissioned_at', 'address', 'latitude', 'longitude'];
 // Set by the server and never accepted from a client.
@@ -7,7 +8,6 @@ const SERVER_SET = {
   province_id: 'Not accepted: the server copies it from the substation.',
   last_reading: 'Not accepted: it is derived from the readings.',
 };
-const ISO_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
 
 const detail = (field, issue) => ({ field, location: 'body', issue, reference: null });
 const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -37,7 +37,7 @@ function validateInstallationBody(body, { requireInstallationId }) {
   check('substation_id', (v) => /^SS-\d{3}$/.test(v), 'Must look like SS-001.');
   check('capacity_kw', (v) => isNumber(v) && v > 0, 'Must be a number greater than 0.');
   check('status', (v) => v === 'active' || v === 'inactive', 'Must be "active" or "inactive".');
-  check('commissioned_at', (v) => typeof v === 'string' && ISO_WITH_ZONE.test(v) && !Number.isNaN(Date.parse(v)), 'Must be an ISO-8601 date-time with a time zone, e.g. 2026-10-01T00:00:00Z.');
+  check('commissioned_at', (v) => parseInstant(v) !== null, 'Must be an ISO-8601 date-time with a time zone, e.g. 2026-10-01T00:00:00Z.');
   check('address', isText, 'Must be non-empty text.');
   check('latitude', (v) => isNumber(v) && v >= -90 && v <= 90, 'Must be a number from -90 to 90.');
   check('longitude', (v) => isNumber(v) && v >= -180 && v <= 180, 'Must be a number from -180 to 180.');
