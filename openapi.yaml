@@ -12,13 +12,17 @@ info:
     **Implemented:** `/health` and the whole read path: provinces, districts, grid substations
     and installations (collections with their filters, and members), the installation composite,
     the last-known reading, and one installation's readings collection and reading member.
+    Also reading ingestion: `POST /installations/{installation-id}/readings` (201 with
+    `Location`, `ETag` and `Last-Modified`; 409 for a duplicate). Readings are append-only:
+    PUT, PATCH and DELETE on a reading or on the readings collection return 405 with `Allow`.
 
     **Documented here but not live yet** (operations marked *(planned)*, plus):
-    - Authentication: every route is currently public; 401 and 403 arrive with the security phase.
-    - Conditional GET: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers as described.
+    - Authentication: every route is currently public, including reading ingestion (a temporary
+      placeholder lets every request through); 401 and 403 arrive with the security phase.
+    - Conditional GET on reads: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers.
     - Pagination, sorting, time-window and status filters on installations and readings: both
       collections currently return a flat array.
-    - Writes (create, replace, delete installations; post readings) and the generation summaries.
+    - Installation writes (create, replace, delete) and the generation summaries.
 
     Every response is `application/json`. Every error uses the `Error` schema.
     A well-formed filter value that matches nothing returns `200 []`; a malformed one returns 400.
@@ -518,8 +522,28 @@ paths:
     post:
       tags: [Readings]
       operationId: createReading
-      summary: (planned) A meter pushes a new reading for its own installation
-      description: The installation comes from the path, never the body. A 409 READING_DUPLICATE means the reading is already stored; a device treats it as success.
+      summary: A meter pushes a new reading for its own installation
+      description: |
+        The installation comes from the path, never the body: an `installation_id` in the body is
+        rejected with 400. The server sets `reading_id`, `received_at` (its own clock) and the
+        jurisdiction ids (copied from the installation); sending any of them is also a 400.
+        `Location` points to the new reading and resolves with GET; `Last-Modified` is `received_at`.
+        Device authentication is a placeholder for now (every request is accepted).
+        A second reading for the same installation and instant is refused with 409 READING_DUPLICATE;
+        the stored reading is never overwritten, and `details[0].reference` is its URI. A device
+        retrying after a lost response treats 409 as success.
+
+        Physically implausible readings are refused with 400 READING_IMPLAUSIBLE, one details entry
+        per broken rule:
+        - `power_kw` at most the installation's `capacity_kw` × 1.1 (reference: the installation);
+        - `energy_kwh` (a cumulative total) not lower than the reading just before this timestamp,
+          and not higher than the reading just after it, if any (reference: that reading). Late,
+          out-of-order readings are checked against their neighbours by time, not by arrival;
+        - `timestamp` no more than 5 minutes ahead of the server clock;
+        - `voltage` between 180 and 270 V.
+
+        Order of checks: 415 → 400 INVALID_JSON / 413 → 400 VALIDATION_FAILED → 404 →
+        400 READING_IMPLAUSIBLE → 409 READING_DUPLICATE.
       requestBody:
         required: true
         content:
@@ -535,14 +559,72 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Reading' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          description: VALIDATION_FAILED (structure, one details entry per problem), READING_IMPLAUSIBLE (physically impossible values), or INVALID_JSON when the body cannot be parsed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                validationFailed:
+                  summary: Missing field and an installation_id sent in the body
+                  value:
+                    code: VALIDATION_FAILED
+                    message: The reading has 2 problems.
+                    details:
+                      - { field: installation_id, location: body, issue: 'Not accepted in the body: the installation comes from the URL path.', reference: null }
+                      - { field: voltage, location: body, issue: Required., reference: null }
+                    more_info: /api-docs#error-codes
+                readingImplausible:
+                  summary: Power above what the installation can produce, and energy lower than the previous reading
+                  value:
+                    code: READING_IMPLAUSIBLE
+                    message: 2 values are physically implausible for this installation.
+                    details:
+                      - { field: power_kw, location: body, issue: '9 kW is more than this installation can produce: at most 5.5 kW (capacity 5 kW × 1.1).', reference: /installations/INS-0001 }
+                      - { field: energy_kwh, location: body, issue: '1019.9 kWh is lower than the previous reading (1020 kWh at 2026-10-06T12:30:00.000Z); the meter total never decreases.', reference: /installations/INS-0001/readings/66f2c1a9e4b0a1b2c3d4e5f6 }
+                    more_info: /api-docs#error-codes
+                invalidJson:
+                  summary: Body is not valid JSON
+                  value: { code: INVALID_JSON, message: The request body is not valid JSON., details: [], more_info: /api-docs#error-codes }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/InstallationNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: READING_DUPLICATE. This installation already has a reading at this instant; reference is its URI.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                code: READING_DUPLICATE
+                message: Installation INS-0001 already has a reading at 2026-10-06T12:30:00.000Z.
+                details:
+                  - { field: timestamp, location: body, issue: A reading for this installation and timestamp already exists., reference: /installations/INS-0001/readings/66f2c1a9e4b0a1b2c3d4e5f6 }
+                more_info: /api-docs#error-codes
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    put:
+      tags: [Readings]
+      operationId: replaceReadingsNotAllowed
+      summary: Not allowed. Readings are append-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
+    patch:
+      tags: [Readings]
+      operationId: patchReadingsNotAllowed
+      summary: Not allowed. Readings are append-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
+    delete:
+      tags: [Readings]
+      operationId: deleteReadingsNotAllowed
+      summary: Not allowed. A reading history is never erased (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
 
   /installations/{installation-id}/readings/{reading-id}:
     parameters:
@@ -583,6 +665,27 @@ paths:
                   value: { code: INSTALLATION_NOT_FOUND, message: No installation with id INS-9999., details: [], more_info: /api-docs#error-codes }
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    put:
+      tags: [Readings]
+      operationId: replaceReadingNotAllowed
+      summary: Not allowed. A reading is never replaced (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
+    patch:
+      tags: [Readings]
+      operationId: patchReadingNotAllowed
+      summary: Not allowed. A reading is never edited (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
+    delete:
+      tags: [Readings]
+      operationId: deleteReadingNotAllowed
+      summary: Not allowed. A reading is never deleted (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
 
 components:
   securitySchemes:
@@ -713,6 +816,12 @@ components:
       schema: { type: string, example: 'private, no-cache' }
     WWWAuthenticate:
       schema: { type: string, example: 'Bearer realm="slsea-solar-api"' }
+    AllowReading:
+      description: The methods this URI does support
+      schema: { type: string, example: 'GET, HEAD' }
+    AllowReadings:
+      description: The methods this URI does support
+      schema: { type: string, example: 'GET, HEAD, POST' }
 
   responses:
     NotModified:
@@ -804,6 +913,22 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: INSTALLATION_NOT_FOUND, message: No installation with id INS-9999., details: [], more_info: /api-docs#error-codes }
+    MethodNotAllowedReading:
+      description: METHOD_NOT_ALLOWED. Readings are append-only; Allow is GET, HEAD. Answered without touching the database.
+      headers:
+        Allow: { $ref: '#/components/headers/AllowReading' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: METHOD_NOT_ALLOWED, message: 'Readings are append-only: DELETE is not allowed here. Allowed: GET, HEAD.', details: [], more_info: /api-docs#error-codes }
+    MethodNotAllowedCollection:
+      description: METHOD_NOT_ALLOWED. A reading history is never replaced or erased; Allow is GET, HEAD, POST.
+      headers:
+        Allow: { $ref: '#/components/headers/AllowReadings' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: METHOD_NOT_ALLOWED, message: 'Readings are append-only: DELETE is not allowed here. Allowed: GET, HEAD, POST.', details: [], more_info: /api-docs#error-codes }
     ServiceUnavailable:
       description: The database cannot be reached (SERVICE_UNAVAILABLE)
       content:
@@ -916,7 +1041,7 @@ components:
         received_at: { type: string, format: date-time, description: When the server stored it, example: '2026-10-06T04:30:04Z' }
 
     ReadingCreate:
-      description: The installation comes from the path. The server sets reading_id, received_at and the jurisdiction ids.
+      description: The installation comes from the path. The server sets reading_id, received_at and the jurisdiction ids; sending any of them, or installation_id, is a 400.
       type: object
       additionalProperties: false
       required: [timestamp, power_kw, energy_kwh, voltage]

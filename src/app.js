@@ -5,6 +5,7 @@ const provincesRouter = require('./routes/read/provinces');
 const districtsRouter = require('./routes/read/districts');
 const gridSubstationsRouter = require('./routes/read/grid-substations');
 const installationsRouter = require('./routes/read/installations');
+const readingsWriteRouter = require('./routes/write/readings');
 const { acceptJson } = require('./middleware/accept-json');
 const { requireDatabase } = require('./middleware/require-database');
 const { unknownRoute, errorHandler } = require('./middleware/error-handler');
@@ -17,6 +18,11 @@ app.use('/api-docs', docsRouter);
 
 app.use(acceptJson);
 app.use('/health', healthRouter);
+
+// Write path. Kept in its own router so the write-read split is visible in the code.
+// It connects to the database per route, and sits before the read routers (which connect for
+// every request they see), so its 405 answers need no database. GETs pass straight through it.
+app.use('/installations', readingsWriteRouter);
 
 // Read path. Authentication and jurisdiction filtering are added in the security phase.
 app.use('/provinces', requireDatabase, provincesRouter);

@@ -14,6 +14,13 @@ function errorHandler(err, req, res, next) {
   if (err instanceof ApiError) {
     return res.status(err.status).json(errorBody(err.code, err.message, err.details));
   }
+  // Errors raised by express.json() while reading the request body.
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json(errorBody('INVALID_JSON', 'The request body is not valid JSON.'));
+  }
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json(errorBody('PAYLOAD_TOO_LARGE', 'The request body is larger than 100 KB.'));
+  }
   // Anything unexpected: log it here, but never send internals (stack, query, driver message) to the client.
   console.error('Unhandled error:', err);
   return res.status(500).json(errorBody('INTERNAL_ERROR', 'Something went wrong on the server.'));

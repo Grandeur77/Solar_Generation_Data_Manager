@@ -1,6 +1,14 @@
 const SolarInstallation = require('../models/solar-installation');
-const { notFound } = require('../utils/errors');
-const { getLastReading, listReadings, findReading } = require('./reading-service');
+const { ApiError, notFound } = require('../utils/errors');
+const {
+  getLastReading,
+  listReadings,
+  findReading,
+  findReadingAt,
+  findNeighbours,
+  insertReading,
+} = require('./reading-service');
+const { plausibilityProblems } = require('../utils/reading-rules');
 
 // Filters combine (AND). Installations carry copies of their district and province ids,
 // so every filter is a direct, indexed match with no lookup through the substation.
@@ -61,7 +69,53 @@ async function getInstallationReading(installationId, readingId) {
   return reading;
 }
 
+// A device's new reading. Everything the client could get wrong comes from elsewhere:
+// the installation from the URL path, the jurisdiction ids from the stored installation
+// (so a device can't file readings under another district), and received_at from the server clock.
+async function createReading(installationId, values) {
+  const installation = await getInstallation(installationId);
+
+  // Physically impossible readings are refused, all problems reported at once.
+  const neighbours = await findNeighbours(installationId, values.timestamp);
+  const problems = plausibilityProblems(installation, values, { ...neighbours, now: Date.now() });
+  if (problems.length > 0) {
+    const noun = problems.length === 1 ? 'value is' : 'values are';
+    throw new ApiError(400, 'READING_IMPLAUSIBLE', `${problems.length} ${noun} physically implausible for this installation.`, problems);
+  }
+
+  try {
+    return await insertReading({
+      ...values,
+      installation_id: installation._id,
+      received_at: new Date(),
+      substation_id: installation.substation_id,
+      district_id: installation.district_id,
+      province_id: installation.province_id,
+    });
+  } catch (err) {
+    // The unique { installation_id, timestamp } index refused a second reading for the same
+    // moment. Catching the refusal (instead of checking first) is safe even when two
+    // requests race. The stored reading is never overwritten: readings are append-only.
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.timestamp) {
+      throw await duplicateReadingError(installationId, values.timestamp);
+    }
+    throw err;
+  }
+}
+
+async function duplicateReadingError(installationId, timestamp) {
+  const existing = await findReadingAt(installationId, timestamp);
+  const location = `/installations/${installationId}/readings/${existing._id}`;
+  return new ApiError(
+    409,
+    'READING_DUPLICATE',
+    `Installation ${installationId} already has a reading at ${timestamp.toISOString()}.`,
+    [{ field: 'timestamp', location: 'body', issue: 'A reading for this installation and timestamp already exists.', reference: location }]
+  );
+}
+
 module.exports = {
+  createReading,
   listInstallations,
   getInstallation,
   getInstallationComposite,
