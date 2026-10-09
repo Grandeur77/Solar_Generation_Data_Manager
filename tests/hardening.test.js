@@ -98,7 +98,7 @@ describe('restricted CORS: only listed browser origins, exact match', () => {
   test('an allowed origin: echoed back, useful headers exposed, no credentials, Vary: Origin', async () => {
     const res = await asAdmin(request(app).get('/provinces').set('Origin', ALLOWED));
     expect(res.headers['access-control-allow-origin']).toBe(ALLOWED);
-    expect(res.headers['access-control-expose-headers']).toBe('ETag,Last-Modified,Location,Retry-After,WWW-Authenticate,Allow');
+    expect(res.headers['access-control-expose-headers']).toBe('ETag,Last-Modified,Location,Retry-After,WWW-Authenticate,Allow,X-Request-Id');
     expect(res.headers['access-control-allow-credentials']).toBeUndefined();
     expect(res.headers.vary).toMatch(/\bOrigin\b/);
   });

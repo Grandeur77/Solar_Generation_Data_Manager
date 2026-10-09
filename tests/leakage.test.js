@@ -203,8 +203,9 @@ describe('figures: a summary only adds up the viewer\'s own area', () => {
 
 describe('coverage: every read endpoint in the API is in this suite', () => {
   const spec = yaml.load(fs.readFileSync(path.join(__dirname, '..', 'openapi.yaml'), 'utf8'));
-  // Every GET in the contract except the public ones (no data to leak).
-  const PUBLIC = ['/health'];
+  // Every GET in the contract except the public ones, which hold no data to leak (/auth/tokens'
+  // GET only ever answers 405).
+  const PUBLIC = ['/health', '/auth/tokens'];
   const specReads = Object.keys(spec.paths).filter((p) => spec.paths[p].get && !PUBLIC.includes(p)).sort();
   const covered = [...new Set(PAIRS.flatMap(([viewer, other]) => requestsAgainst(viewer, other).map(([template]) => template)))].sort();
 

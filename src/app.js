@@ -10,6 +10,7 @@ const installationsRouter = require('./routes/read/installations');
 const readingsWriteRouter = require('./routes/write/readings');
 const installationsWriteRouter = require('./routes/write/installations');
 const { acceptJson } = require('./middleware/accept-json');
+const { requestContext } = require('./middleware/request-context');
 const { authenticate } = require('./middleware/authenticate');
 const { requireReadScope } = require('./middleware/authorize');
 const { corsPolicy } = require('./middleware/cors-policy');
@@ -21,6 +22,8 @@ const { unknownRoute, errorHandler } = require('./middleware/error-handler');
 
 // Builds the app without listening, so tests can drive it with supertest.
 const app = express();
+// First of all, so every response carries X-Request-Id and every request is logged once.
+app.use(requestContext);
 // On Vercel every request arrives through one proxy, which puts the real client address in
 // X-Forwarded-For. Trusting exactly that one hop gives the rate limiter the client's address
 // instead of the proxy's. Locally there is no proxy, so the header is not trusted (it could be faked).

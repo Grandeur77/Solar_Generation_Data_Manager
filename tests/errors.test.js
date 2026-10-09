@@ -83,11 +83,20 @@ describe('central error handler', () => {
   });
 
   test('an unexpected error is a generic 500 that leaks nothing', async () => {
-    const quiet = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const res = await request(testApp).get('/crash');
-    expectErrorBody(res, 500, 'INTERNAL_ERROR');
-    expect(JSON.stringify(res.body)).not.toMatch(/secret|mongodb|stack/i);
-    expect(quiet).toHaveBeenCalled(); // logged on the server instead
-    quiet.mockRestore();
+    // Logging is off under Jest; switch it on to see the error line the server writes instead.
+    process.env.LOG_REQUESTS = 'true';
+    const written = [];
+    const capture = jest.spyOn(process.stderr, 'write').mockImplementation((line) => written.push(String(line)) || true);
+    try {
+      const res = await request(testApp).get('/crash');
+      expectErrorBody(res, 500, 'INTERNAL_ERROR');
+      expect(JSON.stringify(res.body)).not.toMatch(/secret|mongodb|stack/i);
+      // Logged on the server instead, as one structured line.
+      const entry = written.map((l) => JSON.parse(l)).find((e) => e.event === 'unhandled_error');
+      expect(entry).toMatchObject({ level: 'error', message: expect.any(String), stack: expect.any(String) });
+    } finally {
+      capture.mockRestore();
+      delete process.env.LOG_REQUESTS;
+    }
   });
 });

@@ -1,4 +1,5 @@
 const { connectToDatabase } = require('../config/db');
+const { log } = require('../utils/logger');
 const { ApiError } = require('../utils/errors');
 
 // Data routes need a connection before they query. connectToDatabase() returns the cached
@@ -8,7 +9,7 @@ async function requireDatabase(req, res, next) {
     await connectToDatabase();
     next();
   } catch (err) {
-    console.error('Database unreachable:', err.message);
+    log('error', { request_id: req.id, event: 'database_unreachable', message: err.message });
     next(new ApiError(503, 'SERVICE_UNAVAILABLE', 'The database cannot be reached.'));
   }
 }
