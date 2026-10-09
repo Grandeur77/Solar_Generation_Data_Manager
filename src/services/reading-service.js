@@ -11,12 +11,13 @@ async function getLastReading(installationId) {
 // One page of an installation's history, newest first, plus the total across all pages.
 // Every query names the installation, so a reading can only be reached through its own
 // installation (the scope). Both queries use the { installation_id, timestamp } index.
-async function listReadings(installationId, { skip, limit, timestamp }) {
+async function listReadings(installationId, { skip, limit, timestamp, minPowerKw, sort = { timestamp: -1 } }) {
   const filter = { installation_id: installationId };
   // The time window filters on measurement time (timestamp), not on when the server received it.
   if (timestamp) filter.timestamp = timestamp;
+  if (minPowerKw !== undefined) filter.power_kw = { $gte: minPowerKw };
   const [results, count] = await Promise.all([
-    GenerationReading.find(filter).sort({ timestamp: -1 }).skip(skip).limit(limit),
+    GenerationReading.find(filter).sort(sort).skip(skip).limit(limit),
     GenerationReading.countDocuments(filter),
   ]);
   return { results, count };

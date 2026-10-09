@@ -116,6 +116,6 @@ describe('GET /installations/{installation-id} (composite)', () => {
 
   test('the collection stays plain: list items carry no last_reading', async () => {
     const res = await request(app).get('/installations');
-    res.body.forEach((item) => expect(item).not.toHaveProperty('last_reading'));
+    res.body.results.forEach((item) => expect(item).not.toHaveProperty('last_reading'));
   });
 });

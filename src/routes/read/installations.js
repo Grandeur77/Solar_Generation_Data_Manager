@@ -6,19 +6,43 @@ const {
   listInstallationReadings,
   getInstallationReading,
 } = require('../../services/installation-service');
-const { optionalIdParam } = require('../../utils/query');
+const { readIdParam, readEnumParam, readNumberParam, throwIfInvalid } = require('../../utils/query');
 const { readPagination, pageBody } = require('../../utils/pagination');
 const { readTimeWindow, checkTimeWindowOrder, timestampCondition } = require('../../utils/time-window');
+const { readSort, mongoSort } = require('../../utils/sort');
 const { ApiError } = require('../../utils/errors');
 
 const router = express.Router();
 
-// Flat array for now; status filter, sorting and pagination come later.
+const INSTALLATION_SORT_FIELDS = ['installation_id', 'name', 'capacity_kw'];
+
+// Paged like the readings: { count, next, previous, results }. Filters combine (AND); every
+// malformed value is reported in one 400, then the sort is checked.
 router.get('/', async (req, res) => {
-  const provinceId = optionalIdParam(req.query, 'province-id', /^PV-\d{2}$/, 'PV-01');
-  const districtId = optionalIdParam(req.query, 'district-id', /^DT-\d{2}$/, 'DT-01');
-  const substationId = optionalIdParam(req.query, 'substation-id', /^SS-\d{3}$/, 'SS-001');
-  res.json(await listInstallations({ provinceId, districtId, substationId }));
+  const problems = [];
+  const provinceId = readIdParam(req.query, 'province-id', /^PV-\d{2}$/, 'PV-01', problems);
+  const districtId = readIdParam(req.query, 'district-id', /^DT-\d{2}$/, 'DT-01', problems);
+  const substationId = readIdParam(req.query, 'substation-id', /^SS-\d{3}$/, 'SS-001', problems);
+  const status = readEnumParam(req.query, 'status', ['active', 'inactive'], problems);
+  const { page, pageSize } = readPagination(req.query, problems);
+  throwIfInvalid(problems);
+  const sortValue = readSort(req.query, INSTALLATION_SORT_FIELDS, 'installation_id');
+
+  const { results, count } = await listInstallations(
+    { provinceId, districtId, substationId, status },
+    // installation_id (stored as _id) is unique, so it breaks ties for equal names or capacities.
+    { skip: (page - 1) * pageSize, limit: pageSize, sort: mongoSort(sortValue, '_id', 1, { installation_id: '_id' }) }
+  );
+
+  // Links keep every active filter and the sort, in a fixed order.
+  const active = [];
+  if (provinceId) active.push(['province-id', provinceId]);
+  if (districtId) active.push(['district-id', districtId]);
+  if (substationId) active.push(['substation-id', substationId]);
+  if (status) active.push(['status', status]);
+  active.push(['sort', sortValue]);
+
+  res.json(pageBody({ path: '/installations', page, pageSize, count, results, active }));
 });
 
 // Composite: the installation plus its latest reading, so a dashboard needs one request.
@@ -32,36 +56,46 @@ router.get('/:installationId/last-known-reading', async (req, res) => {
   res.json(await getLastKnownReading(req.params.installationId));
 });
 
-// Every malformed query value is reported in one 400 (INVALID_QUERY_PARAMETER); only when all are
-// well-formed is the window's order checked (INVALID_TIME_WINDOW).
+const READING_SORT_FIELDS = ['timestamp', 'power_kw', 'energy_kwh'];
+
+// Checked in this order: malformed values, all reported in one 400 (INVALID_QUERY_PARAMETER),
+// then the sort field (INVALID_SORT_FIELD), then the window's order (INVALID_TIME_WINDOW).
 function readReadingsQuery(query) {
   const problems = [];
   const { page, pageSize } = readPagination(query, problems);
   const window = readTimeWindow(query, problems);
-  if (problems.length > 0) {
-    throw new ApiError(400, 'INVALID_QUERY_PARAMETER', 'One or more query parameters are invalid.', problems);
-  }
+  const minPowerKw = readNumberParam(query, 'min-power-kw', 0, problems);
+  throwIfInvalid(problems);
+  // Newest first by default: the usual question about a site's history is what it did recently.
+  const sortValue = readSort(query, READING_SORT_FIELDS, '-timestamp');
   checkTimeWindowOrder(window);
-  return { page, pageSize, window, timestamp: timestampCondition(window) };
+  return {
+    page,
+    pageSize,
+    window,
+    sortValue,
+    minPowerKw,
+    timestamp: timestampCondition(window),
+    // timestamp is unique per installation, so it is the tie-breaker for equal power or energy values.
+    sort: mongoSort(sortValue, 'timestamp'),
+  };
 }
 
 // Readings exist only under their installation; there is deliberately no top-level /readings.
-// Paged, newest first: { count, next, previous, results }, optionally within ?from= / ?to=.
+// Paged: { count, next, previous, results }, optionally within ?from= / ?to=, sorted by ?sort=.
 router.get('/:installationId/readings', async (req, res) => {
   const { installationId } = req.params;
-  let window;
-  const { page, pageSize, results, count } = await listInstallationReadings(installationId, () => {
-    const parsed = readReadingsQuery(req.query);
-    window = parsed.window;
-    return parsed;
-  });
+  const { page, pageSize, window, minPowerKw, sortValue, results, count } = await listInstallationReadings(installationId, () =>
+    readReadingsQuery(req.query)
+  );
 
-  // Links keep the window (as canonical UTC instants) and the sort, in a fixed order.
-  // Sort is fixed newest-first for now; it is still in every link so each page has one URL.
+  // Links keep the window (as canonical UTC instants), min-power-kw and the sort, in a fixed order,
+  // so following them never changes what is being paged and each page has exactly one URL.
   const active = [];
   if (window.from) active.push(['from', window.from.toISOString()]);
   if (window.to) active.push(['to', window.to.toISOString()]);
-  active.push(['sort', '-timestamp']);
+  if (minPowerKw !== undefined) active.push(['min-power-kw', String(minPowerKw)]);
+  active.push(['sort', sortValue]);
 
   res.json(pageBody({ path: `/installations/${installationId}/readings`, page, pageSize, count, results, active }));
 });

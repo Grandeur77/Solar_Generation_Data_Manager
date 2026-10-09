@@ -1,16 +1,46 @@
 const { ApiError } = require('./errors');
 
-// Reads an optional id filter such as ?province-id=PV-01. Missing → undefined.
-// A malformed value, or the same parameter given twice, is a client error (400), not an empty result.
-function optionalIdParam(query, name, pattern, example) {
+// Query readers collect problems instead of throwing, so one 400 lists every bad value at once.
+const detail = (field, issue) => ({ field, location: 'query', issue, reference: null });
+
+// An optional id filter such as ?province-id=PV-01. A malformed value, or the parameter
+// given twice, is a client error, not an empty result.
+function readIdParam(query, name, pattern, example, problems) {
   const value = query[name];
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || !pattern.test(value)) {
-    throw new ApiError(400, 'INVALID_QUERY_PARAMETER', `${name} must be a single id like ${example}.`, [
-      { field: name, location: 'query', issue: `Must match ${example}.`, reference: null },
-    ]);
+    problems.push(detail(name, `Must match ${example}, given once.`));
+    return undefined;
   }
   return value;
 }
 
-module.exports = { optionalIdParam };
+// An optional value from a fixed list, e.g. ?status=active.
+function readEnumParam(query, name, allowed, problems) {
+  const value = query[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    problems.push(detail(name, `Must be one of: ${allowed.join(', ')}, given once.`));
+    return undefined;
+  }
+  return value;
+}
+
+// An optional plain decimal number ≥ min, e.g. ?min-power-kw=1.5. No exponents or signs.
+function readNumberParam(query, name, min, problems) {
+  const value = query[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^\d+(\.\d+)?$/.test(value) || Number(value) < min) {
+    problems.push(detail(name, `Must be a number, ${min} or more, given once.`));
+    return undefined;
+  }
+  return Number(value);
+}
+
+function throwIfInvalid(problems) {
+  if (problems.length > 0) {
+    throw new ApiError(400, 'INVALID_QUERY_PARAMETER', 'One or more query parameters are invalid.', problems);
+  }
+}
+
+module.exports = { readIdParam, readEnumParam, readNumberParam, throwIfInvalid };
