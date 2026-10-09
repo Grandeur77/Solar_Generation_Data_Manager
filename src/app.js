@@ -9,6 +9,7 @@ const installationsRouter = require('./routes/read/installations');
 const readingsWriteRouter = require('./routes/write/readings');
 const installationsWriteRouter = require('./routes/write/installations');
 const { acceptJson } = require('./middleware/accept-json');
+const { authenticate } = require('./middleware/authenticate');
 const { requireDatabase } = require('./middleware/require-database');
 const { conditionalGet } = require('./middleware/conditional-get');
 const { unknownRoute, errorHandler } = require('./middleware/error-handler');
@@ -27,6 +28,13 @@ app.use((req, res, next) => {
 
 // The docs page is HTML and the spec is YAML, so they sit before the JSON-only check.
 app.use('/api-docs', docsRouter);
+
+// Every resource of the API needs a bearer token. Registered once, here, in front of every route
+// under these paths and before anything else looks at the request, so an unauthenticated caller
+// gets 401 and learns nothing else: not whether an id exists (404), which methods a URI allows
+// (405), or anything about its Accept header (406). /health, /api-docs and /auth/tokens stay
+// public, and a path that is no resource at all is still 404.
+app.use(['/provinces', '/districts', '/grid-substations', '/installations'], authenticate);
 
 app.use(acceptJson);
 app.use('/health', healthRouter);

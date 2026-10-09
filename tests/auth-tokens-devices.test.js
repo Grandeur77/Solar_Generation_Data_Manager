@@ -1,4 +1,6 @@
 const request = require('supertest');
+// Registry calls used to set up a case need a token; sign-in itself is public.
+const asAdmin = require('./helpers/authed-request');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const app = require('../src/app');
@@ -84,12 +86,12 @@ describe('401: wrong credentials, one answer for every case', () => {
   });
 
   test('a deleted installation\'s meter → 401, like an unknown meter', async () => {
-    expect((await request(app).delete('/installations/INS-0005')).status).toBe(200);
+    expect((await asAdmin(app).delete('/installations/INS-0005')).status).toBe(200);
     expect401(await meterSignIn('MTR-000005', secretOf('INS-0005')));
   });
 
   test('an installation registered through the API (no secret issued yet) → 401, not 500', async () => {
-    const created = await request(app).post('/installations').send({
+    const created = await asAdmin(app).post('/installations').send({
       installation_id: 'INS-0006', name: 'Kolonnawa test rooftop 6', meter_id: 'MTR-000006', substation_id: 'SS-001',
       capacity_kw: 5, status: 'active', commissioned_at: '2026-10-01T00:00:00Z', address: 'No. 6, Test Road, Kolonnawa', latitude: 6.9, longitude: 79.9,
     });
@@ -119,10 +121,10 @@ describe('403: an inactive installation cannot get a token', () => {
       name: 'Kolonnawa test rooftop 1', meter_id: 'MTR-000001', substation_id: 'SS-001', capacity_kw: 5,
       commissioned_at: '2024-01-15T00:00:00Z', address: 'No. 1, Test Road, Kolonnawa', latitude: 6.9, longitude: 79.9,
     };
-    expect((await request(app).put('/installations/INS-0001').send({ ...full, status: 'inactive' })).status).toBe(200);
+    expect((await asAdmin(app).put('/installations/INS-0001').send({ ...full, status: 'inactive' })).status).toBe(200);
     expectErrorBody(await meterSignIn('MTR-000001', secretOf('INS-0001')), 403, 'ACCOUNT_INACTIVE');
 
-    expect((await request(app).put('/installations/INS-0001').send({ ...full, status: 'active' })).status).toBe(200);
+    expect((await asAdmin(app).put('/installations/INS-0001').send({ ...full, status: 'active' })).status).toBe(200);
     expect((await meterSignIn('MTR-000001', secretOf('INS-0001'))).status).toBe(201);
   });
 });

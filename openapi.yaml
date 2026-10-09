@@ -34,10 +34,16 @@ info:
     Tokens: `POST /auth/tokens` with `email` + `password` or `meter_id` + `device_secret` (201 with a
     signed bearer token; 401 for wrong credentials; 403 for an inactive user or installation).
 
+    Authentication: every route under `/provinces`, `/districts`, `/grid-substations` and
+    `/installations` needs `Authorization: Bearer <token>`. A missing token is 401
+    `AUTHENTICATION_REQUIRED`; an invalid one (signature, issuer, audience, algorithm, missing `exp`)
+    is 401 `INVALID_TOKEN`; an expired one is 401 `TOKEN_EXPIRED` (30 s clock tolerance). Every 401
+    carries `WWW-Authenticate: Bearer realm="slsea-solar-api"`, with `error="invalid_token"` when a token
+    was sent but refused. 401 comes before 404, 405 and 406.
+
     **Documented here but not live yet:**
-    - Checking tokens: every route is currently public, including reading ingestion and the
-      registry (temporary placeholders let every request through); 401 and 403 on the other routes
-      arrive with the rest of the security phase.
+    - Scope, installation and jurisdiction checks (403): any valid token currently reaches every
+      guarded route, including a device token on a read route.
 
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.

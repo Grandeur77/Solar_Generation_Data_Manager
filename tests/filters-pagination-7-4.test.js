@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const app = require('../src/app');
 const SolarInstallation = require('../src/models/solar-installation');
 const { setUpTestDatabase, loadTestSeed, tearDownTestDatabase } = require('./helpers/test-db');

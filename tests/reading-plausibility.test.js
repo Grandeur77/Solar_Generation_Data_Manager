@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const app = require('../src/app');
 const GenerationReading = require('../src/models/generation-reading');
 const { CAPACITY_TOLERANCE, MIN_VOLTAGE, MAX_VOLTAGE } = require('../src/utils/reading-rules');

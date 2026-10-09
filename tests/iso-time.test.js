@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const app = require('../src/app');
 const { parseInstant } = require('../src/utils/iso-time');
 const { setUpTestDatabase, tearDownTestDatabase } = require('./helpers/test-db');

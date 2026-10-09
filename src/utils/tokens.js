@@ -44,4 +44,19 @@ function signToken({ subject, claims, lifetimeSeconds }) {
   });
 }
 
-module.exports = { ISSUER, AUDIENCE, ALGORITHM, SCOPES, LIFETIME_SECONDS, signToken };
+// Device and server clocks drift a little; a token that expired seconds ago is still accepted.
+const CLOCK_TOLERANCE_SECONDS = 30;
+
+// Checks the signature, pins the algorithm (a token whose header says "none" or another
+// algorithm is refused), and checks iss, aud and exp. Throws jsonwebtoken's errors
+// (TokenExpiredError, JsonWebTokenError) for the caller to turn into a 401.
+function verifyToken(token) {
+  return jwt.verify(token, signingSecret(), {
+    algorithms: [ALGORITHM],
+    issuer: ISSUER,
+    audience: AUDIENCE,
+    clockTolerance: CLOCK_TOLERANCE_SECONDS,
+  });
+}
+
+module.exports = { ISSUER, AUDIENCE, ALGORITHM, SCOPES, LIFETIME_SECONDS, CLOCK_TOLERANCE_SECONDS, signToken, verifyToken };
