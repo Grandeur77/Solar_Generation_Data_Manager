@@ -1,5 +1,5 @@
 const express = require('express');
-const { createReading } = require('../../services/installation-service');
+const { createReading, ensureInstallationAcceptsReadings } = require('../../services/installation-service');
 const { validateNewReading } = require('../../utils/validate-reading');
 const { jsonBody } = require('../../middleware/json-body');
 const { requireDatabase } = require('../../middleware/require-database');
@@ -13,8 +13,21 @@ const router = express.Router();
 // Write path: a meter adds a reading for the installation named in the path.
 // "A collection resource is a factory for its members": POST to the readings collection creates one.
 // Only a meter's token (installation-write), and only for its own installation: checked first,
-// before the body is read (403 before 415/400), and without the database.
-router.post('/:installationId/readings', requireScope(SCOPES.INSTALLATION_WRITE), requireOwnInstallation, jsonBody, requireDatabase, async (req, res) => {
+// without the database. Then the installation must still exist (404) and be active (403), and only
+// then is the body read (415/400), in the design's order.
+async function installationAcceptsReadings(req, res, next) {
+  await ensureInstallationAcceptsReadings(req.params.installationId);
+  next();
+}
+
+router.post(
+  '/:installationId/readings',
+  requireScope(SCOPES.INSTALLATION_WRITE),
+  requireOwnInstallation,
+  requireDatabase,
+  installationAcceptsReadings,
+  jsonBody,
+  async (req, res) => {
   const { installationId } = req.params;
   const values = validateNewReading(req.body);
   const reading = await createReading(installationId, values);
@@ -27,7 +40,8 @@ router.post('/:installationId/readings', requireScope(SCOPES.INSTALLATION_WRITE)
     .set('ETag', strongEtag(body))
     .set('Last-Modified', httpDate(reading.received_at))
     .json(body);
-});
+  }
+);
 
 // Readings are append-only: they are never replaced, edited or deleted, one at a time or all
 // at once. 405 says the method is wrong for this resource (not that the resource is missing),

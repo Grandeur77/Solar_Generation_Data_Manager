@@ -48,6 +48,15 @@ async function getInstallation(installationId) {
   return installation;
 }
 
+// Write path: a meter's token outlives a deactivation by up to 24 h, so the installation's current
+// status is checked on every reading. An inactive installation stops gaining data at once.
+async function ensureInstallationAcceptsReadings(installationId) {
+  const installation = await getInstallation(installationId); // 404 if it no longer exists
+  if (installation.status !== 'active') {
+    throw new ApiError(403, 'ACCOUNT_INACTIVE', `Installation ${installationId} is inactive and cannot add readings.`);
+  }
+}
+
 // Read path: 404 if it doesn't exist, then 403 if it is outside the caller's jurisdiction.
 // Everything under /installations/{installation-id} starts here.
 async function getReadableInstallation(installationId, auth) {
@@ -233,6 +242,7 @@ module.exports = {
   replaceInstallation,
   registerInstallation,
   createReading,
+  ensureInstallationAcceptsReadings,
   listInstallations,
   getInstallation,
   getInstallationComposite,
