@@ -1,5 +1,7 @@
 const { ApiError, errorBody } = require('../utils/errors');
 
+const BEARER_CHALLENGE = 'Bearer realm="slsea-solar-api"';
+
 // Registered after every route: nothing matched, so the path is not a resource of this API.
 function unknownRoute(req, res, next) {
   next(new ApiError(404, 'ROUTE_NOT_FOUND', `There is no resource at ${req.method} ${req.path}.`));
@@ -14,6 +16,9 @@ function errorHandler(err, req, res, next) {
   // An error is never stored by a cache and replayed later.
   res.set('Cache-Control', 'no-store');
   if (err instanceof ApiError) {
+    res.set(err.headers);
+    // Every 401 must say how to authenticate. Set here, once, so no 401 can ever go without it.
+    if (err.status === 401 && !res.get('WWW-Authenticate')) res.set('WWW-Authenticate', BEARER_CHALLENGE);
     return res.status(err.status).json(errorBody(err.code, err.message, err.details));
   }
   // Errors raised by express.json() while reading the request body.

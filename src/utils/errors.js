@@ -6,12 +6,14 @@ function errorBody(code, message, details = []) {
 }
 
 // Thrown by routes and services; the central error handler turns it into a response.
+// headers: response headers this error needs, e.g. WWW-Authenticate on a 401.
 class ApiError extends Error {
-  constructor(status, code, message, details = []) {
+  constructor(status, code, message, details = [], headers = {}) {
     super(message);
     this.status = status;
     this.code = code;
     this.details = details;
+    this.headers = headers;
   }
 }
 

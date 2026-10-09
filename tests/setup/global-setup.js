@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 // One throwaway MongoDB for the whole test run. Each test worker uses its own database on it
@@ -7,4 +8,6 @@ module.exports = async function globalSetup() {
   globalThis.__MONGOD__ = mongod;
   // Workers start after this runs, so they inherit the variable.
   process.env.TEST_MONGODB_BASE_URI = mongod.getUri();
+  // A fresh random signing secret for every run: tests never need (or see) a real one.
+  process.env.JWT_SECRET = crypto.randomBytes(32).toString('hex');
 };

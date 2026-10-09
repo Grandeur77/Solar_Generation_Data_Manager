@@ -31,10 +31,13 @@ info:
     (a DELETE, or a PUT moving it out of a filter) no remaining member changes, so no date would
     advance. They are revalidated by `ETag` only, which changes whenever the body does.
 
+    Tokens: `POST /auth/tokens` with `email` + `password` or `meter_id` + `device_secret` (201 with a
+    signed bearer token; 401 for wrong credentials; 403 for an inactive user or installation).
+
     **Documented here but not live yet:**
-    - Authentication: every route is currently public, including reading ingestion and the
-      registry (temporary placeholders let every request through); 401 and 403 arrive with the
-      security phase.
+    - Checking tokens: every route is currently public, including reading ingestion and the
+      registry (temporary placeholders let every request through); 401 and 403 on the other routes
+      arrive with the rest of the security phase.
 
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.
@@ -108,10 +111,10 @@ paths:
     post:
       tags: [Auth]
       operationId: createToken
-      summary: (planned) Exchange credentials for a bearer token
+      summary: Exchange credentials for a bearer token
       description: |
         Send exactly one credential pair: `email` + `password` (SLSEA user or registry admin) or
-        `meter_id` + `device_secret` (a meter). A successful call creates a new token, so it is 201,
+        `meter_id` + `device_secret` (a meter). A body that mixes the two pairs is 400. A successful call creates a new token, so it is 201,
         and two identical calls give two different tokens.
 
         | Client | `scope` | Lifetime |
@@ -149,7 +152,7 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { code: INVALID_CREDENTIALS, message: The credentials are not valid., details: [], more_info: /api-docs#error-codes }
         '403':
-          description: ACCOUNT_INACTIVE. Correct credentials, but the user or installation is inactive.
+          description: ACCOUNT_INACTIVE. Correct credentials, but the user or installation is inactive. A meter of an installation registered through the API has no secret yet and gets 401.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

@@ -1,5 +1,6 @@
 const express = require('express');
 const healthRouter = require('./routes/health');
+const authRouter = require('./routes/auth');
 const docsRouter = require('./routes/docs');
 const provincesRouter = require('./routes/read/provinces');
 const districtsRouter = require('./routes/read/districts');
@@ -29,6 +30,9 @@ app.use('/api-docs', docsRouter);
 
 app.use(acceptJson);
 app.use('/health', healthRouter);
+// Public on purpose: it is how a client gets a token in the first place. Above conditionalGet
+// because a token response must never get an ETag or a 304.
+app.use('/auth/tokens', authRouter);
 
 // Every GET below gets a strong ETag, Last-Modified and 304 support. /health is above on purpose:
 // it must always be checked live, never answered from a cached copy.
