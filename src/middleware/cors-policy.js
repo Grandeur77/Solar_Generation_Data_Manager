@@ -14,7 +14,7 @@ const corsPolicy = cors({
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'If-Match', 'If-None-Match', 'If-Modified-Since'],
   // Headers a browser script may read; without this it could not see an ETag or Location.
-  exposedHeaders: ['ETag', 'Last-Modified', 'Location', 'Retry-After', 'WWW-Authenticate', 'Allow'],
+  exposedHeaders: ['ETag', 'Last-Modified', 'Location', 'Retry-After', 'WWW-Authenticate', 'Allow', 'X-Request-Id'],
   credentials: false,
   maxAge: 600,
 });

@@ -63,6 +63,12 @@ info:
     Every response under the guarded paths has `Cache-Control: private, no-cache` (errors `no-store`)
     and `Vary: Accept, Authorization`.
 
+    Every response carries `X-Request-Id` (the caller's own, if it is a safe value of up to 128
+    characters, otherwise a new UUID). The server writes one structured JSON log line per request with
+    that id, the method, the path (never the query string), the status, the duration and, once a token
+    is verified, its `sub` and scope. Headers and bodies are never logged, so tokens, passwords and
+    device secrets never reach the logs. Quote the id when reporting a problem.
+
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.
     A well-formed filter value that matches nothing returns `200 []`; a malformed one returns 400.
@@ -117,6 +123,7 @@ paths:
         '200':
           description: The service is running and the database answers
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
@@ -126,6 +133,7 @@ paths:
         '503':
           description: The database cannot be reached (`SERVICE_UNAVAILABLE`)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
@@ -170,6 +178,7 @@ paths:
         '201':
           description: A new token
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
@@ -178,6 +187,7 @@ paths:
         '401':
           description: INVALID_CREDENTIALS. Unknown email or meter, or wrong password or secret (one message for all).
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
           content:
@@ -187,6 +197,7 @@ paths:
         '403':
           description: ACCOUNT_INACTIVE. Correct credentials, but the user or installation is inactive. A meter of an installation registered through the API has no secret yet and gets 401.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
@@ -206,6 +217,7 @@ paths:
         '405':
           description: METHOD_NOT_ALLOWED. Allow is POST.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Allow: { $ref: '#/components/headers/AllowTokens' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
@@ -221,6 +233,7 @@ paths:
         '405':
           description: METHOD_NOT_ALLOWED. Allow is POST.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Allow: { $ref: '#/components/headers/AllowTokens' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
@@ -236,6 +249,7 @@ paths:
         '405':
           description: METHOD_NOT_ALLOWED. Allow is POST.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Allow: { $ref: '#/components/headers/AllowTokens' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
@@ -251,6 +265,7 @@ paths:
         '405':
           description: METHOD_NOT_ALLOWED. Allow is POST.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Allow: { $ref: '#/components/headers/AllowTokens' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
@@ -271,6 +286,7 @@ paths:
         '200':
           description: Provinces (flat array, not paginated)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -302,6 +318,7 @@ paths:
         '200':
           description: The province
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
@@ -334,6 +351,7 @@ paths:
         '200':
           description: The province summary
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -403,6 +421,7 @@ paths:
         '200':
           description: Districts (flat array, not paginated)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -434,6 +453,7 @@ paths:
         '200':
           description: The district
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
@@ -466,6 +486,7 @@ paths:
         '200':
           description: The district summary
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -536,6 +557,7 @@ paths:
         '200':
           description: Grid substations (flat array, not paginated)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -567,6 +589,7 @@ paths:
         '200':
           description: The grid substation
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
@@ -608,6 +631,7 @@ paths:
         '200':
           description: One page of installations (plain shape, no last_reading)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -618,6 +642,7 @@ paths:
         '400':
           description: INVALID_QUERY_PARAMETER (a malformed filter, status or page value; all reported at once) or INVALID_SORT_FIELD (reference lists installation_id, name, capacity_kw)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -667,6 +692,7 @@ paths:
         '201':
           description: Created. The body is the new installation as the composite (last_reading is null).
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
             Vary: { $ref: '#/components/headers/Vary' }
             Location: { $ref: '#/components/headers/Location' }
@@ -678,6 +704,7 @@ paths:
         '400':
           description: VALIDATION_FAILED (one details entry per field), UNKNOWN_SUBSTATION (substation_id names no substation; 400 because the problem is a body field, not the URI), or INVALID_JSON
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -707,6 +734,7 @@ paths:
         '409':
           description: INSTALLATION_ID_TAKEN (reference is the existing installation) or METER_ID_TAKEN
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -749,6 +777,7 @@ paths:
         '200':
           description: The installation composite. last_reading is null if there are no readings yet.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
@@ -791,6 +820,7 @@ paths:
         '200':
           description: Replaced. The body is the installation as the composite.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
             Vary: { $ref: '#/components/headers/Vary' }
             ETag: { $ref: '#/components/headers/ETag' }
@@ -801,6 +831,7 @@ paths:
         '400':
           description: VALIDATION_FAILED (including any missing field), ID_MISMATCH, UNKNOWN_SUBSTATION, or INVALID_JSON
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -831,6 +862,7 @@ paths:
         '409':
           description: METER_ID_TAKEN. The meter is fitted to another installation.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -853,6 +885,7 @@ paths:
         '405':
           description: METHOD_NOT_ALLOWED. Partial updates are not offered; PUT replaces the whole installation.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
             Allow:
@@ -882,6 +915,7 @@ paths:
         '200':
           description: Removed. The body is the installation as the composite, as it was just before removal. A second DELETE returns 404.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
             Vary: { $ref: '#/components/headers/Vary' }
           content:
@@ -911,6 +945,7 @@ paths:
         '200':
           description: The latest reading
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
@@ -925,6 +960,7 @@ paths:
         '404':
           description: INSTALLATION_NOT_FOUND, or NO_READINGS_YET when the installation exists but has no readings
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -975,6 +1011,7 @@ paths:
         '200':
           description: One page of the installation's readings, newest first
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
@@ -990,6 +1027,7 @@ paths:
             the allowed fields (reference lists them). INVALID_TIME_WINDOW: from is not earlier than to.
             Checked in that order.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -1065,6 +1103,7 @@ paths:
         '201':
           description: Created. The body is the stored reading.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
             Vary: { $ref: '#/components/headers/Vary' }
             Location: { $ref: '#/components/headers/Location' }
@@ -1076,6 +1115,7 @@ paths:
         '400':
           description: VALIDATION_FAILED (structure, one details entry per problem), READING_IMPLAUSIBLE (physically impossible values), or INVALID_JSON when the body cannot be parsed
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -1110,6 +1150,7 @@ paths:
         '409':
           description: READING_DUPLICATE. This installation already has a reading at this instant; reference is its URI.
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -1172,6 +1213,7 @@ paths:
         '200':
           description: The reading
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
@@ -1186,6 +1228,7 @@ paths:
         '404':
           description: INSTALLATION_NOT_FOUND when the parent is missing, or READING_NOT_FOUND when this installation has no such reading (including a real reading id that belongs to another installation)
           headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
             Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
@@ -1366,6 +1409,9 @@ components:
       schema: { type: string, example: '"a3f9c2d1"' }
 
   headers:
+    RequestId:
+      description: "Identifies this request in the server's logs. The caller's own X-Request-Id is echoed when it is 1–128 characters of letters, digits and . _ : -; otherwise a new UUID. Quote it when reporting a problem."
+      schema: { type: string, example: 3f2b8c1e-9a4d-4e7b-8c21-5d6f0a1b2c3d }
     CacheControlNoStore:
       description: Never stored by any cache
       schema: { type: string, example: no-store }
@@ -1407,6 +1453,7 @@ components:
     NotModified:
       description: The client's copy is current. No body. Last-Modified is present only for single resources.
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         ETag: { $ref: '#/components/headers/ETag' }
         Last-Modified: { $ref: '#/components/headers/LastModified' }
         Vary: { $ref: '#/components/headers/Vary' }
@@ -1414,6 +1461,7 @@ components:
     BadRequest:
       description: Invalid body or query value
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1423,6 +1471,7 @@ components:
     Unauthorized:
       description: Missing, invalid or expired token
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
         WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
@@ -1433,6 +1482,7 @@ components:
     TooManyRequests:
       description: TOO_MANY_REQUESTS. Too many token requests from this client; wait for Retry-After seconds.
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
         Retry-After: { $ref: '#/components/headers/RetryAfter' }
@@ -1443,6 +1493,7 @@ components:
     Forbidden:
       description: Valid token but not allowed (scope, installation or jurisdiction)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
         WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticateInsufficientScope' }
@@ -1453,6 +1504,7 @@ components:
     NotFound:
       description: The member or its parent does not exist
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1462,6 +1514,7 @@ components:
     NotAcceptable:
       description: The Accept header excludes application/json
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1471,6 +1524,7 @@ components:
     Conflict:
       description: Conflicts with existing data (duplicate reading, installation_id or meter_id)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1480,6 +1534,7 @@ components:
     PreconditionFailed:
       description: PRECONDITION_FAILED. If-Match does not match the installation's current ETag (strong comparison; W/ tags never match). Nothing was changed.
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1494,6 +1549,7 @@ components:
     PayloadTooLarge:
       description: The request body is over 100 KB
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1503,6 +1559,7 @@ components:
     UnsupportedMediaType:
       description: The request body is not application/json
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1512,6 +1569,7 @@ components:
     InvalidQueryParameter:
       description: A filter value is malformed or given more than once (INVALID_QUERY_PARAMETER)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1526,6 +1584,7 @@ components:
     ProvinceNotFound:
       description: No province with this id (PROVINCE_NOT_FOUND)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1535,6 +1594,7 @@ components:
     DistrictNotFound:
       description: No district with this id (DISTRICT_NOT_FOUND)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1544,6 +1604,7 @@ components:
     SubstationNotFound:
       description: No grid substation with this id (SUBSTATION_NOT_FOUND)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1553,6 +1614,7 @@ components:
     InstallationNotFound:
       description: No installation with this id; for a scoped resource, the parent is missing (INSTALLATION_NOT_FOUND)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
@@ -1562,6 +1624,7 @@ components:
     MethodNotAllowedReading:
       description: METHOD_NOT_ALLOWED. Readings are append-only; Allow is GET, HEAD. Answered without touching the database.
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
         Allow: { $ref: '#/components/headers/AllowReading' }
@@ -1572,6 +1635,7 @@ components:
     MethodNotAllowedSummary:
       description: METHOD_NOT_ALLOWED. A generation summary is worked out on request and is read-only; Allow is GET, HEAD.
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
         Allow: { $ref: '#/components/headers/AllowReading' }
@@ -1582,6 +1646,7 @@ components:
     MethodNotAllowedCollection:
       description: METHOD_NOT_ALLOWED. A reading history is never replaced or erased; Allow is GET, HEAD, POST.
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
         Allow: { $ref: '#/components/headers/AllowReadings' }
@@ -1592,6 +1657,7 @@ components:
     ServiceUnavailable:
       description: The database cannot be reached (SERVICE_UNAVAILABLE)
       headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
         Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
         Vary: { $ref: '#/components/headers/VaryScoped' }
       content:

@@ -60,7 +60,7 @@ function operationFor(method, url) {
 }
 
 // Headers whose presence the spec must document when the API sends them.
-const TRACKED_HEADERS = ['etag', 'last-modified', 'location', 'allow', 'retry-after', 'www-authenticate', 'cache-control', 'vary'];
+const TRACKED_HEADERS = ['etag', 'last-modified', 'location', 'allow', 'retry-after', 'www-authenticate', 'cache-control', 'vary', 'x-request-id'];
 
 async function send([method, url, token, body, headers = {}]) {
   let req = request(app)[method](url);

@@ -1,4 +1,5 @@
 const express = require('express');
+const { log } = require('../utils/logger');
 const { connectToDatabase } = require('../config/db');
 const { errorBody } = require('../utils/errors');
 
@@ -15,7 +16,7 @@ router.get('/', async (req, res) => {
     res.json({ status: 'ok', database: 'connected' });
   } catch (err) {
     // Log the cause server-side only; the client never sees connection details.
-    console.error('Health check: database unreachable:', err.message);
+    log('error', { request_id: req.id, event: 'health_database_unreachable', message: err.message });
     res.status(503).json(errorBody('SERVICE_UNAVAILABLE', 'The database cannot be reached.'));
   }
 });

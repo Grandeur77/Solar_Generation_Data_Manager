@@ -1,4 +1,5 @@
 const { ApiError, errorBody } = require('../utils/errors');
+const { log } = require('../utils/logger');
 
 const BEARER_CHALLENGE = 'Bearer realm="slsea-solar-api"';
 
@@ -28,8 +29,10 @@ function errorHandler(err, req, res, next) {
   if (err.type === 'entity.too.large') {
     return res.status(413).json(errorBody('PAYLOAD_TOO_LARGE', 'The request body is larger than 100 KB.'));
   }
-  // Anything unexpected: log it here, but never send internals (stack, query, driver message) to the client.
-  console.error('Unhandled error:', err);
+  // Anything unexpected: log it here, but never send internals (stack, query, driver message) to the
+  // client. Only the message and stack are logged, never the error object itself, which can carry
+  // request data. The request id ties it to the request's own log line and to the client's report.
+  log('error', { request_id: req.id, event: 'unhandled_error', message: err.message, stack: err.stack });
   return res.status(500).json(errorBody('INTERNAL_ERROR', 'Something went wrong on the server.'));
 }
 
