@@ -170,7 +170,6 @@ paths:
           description: The province summary
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -255,7 +254,6 @@ paths:
           description: The district summary
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -978,7 +976,7 @@ components:
     Date:
       name: date
       in: query
-      description: Sri Lanka calendar day (Asia/Colombo) to summarise. Defaults to today.
+      description: Sri Lanka calendar day (Asia/Colombo) to summarise, YYYY-MM-DD. Defaults to today. An impossible date, another format or a day after today → 400 INVALID_QUERY_PARAMETER.
       schema: { type: string, format: date, example: '2026-10-06' }
     IfNoneMatch:
       name: If-None-Match
@@ -1280,10 +1278,10 @@ components:
       required: [district_id, date, total_power_kw, power_as_of, day_energy_kwh]
       properties:
         district_id: { type: string, example: DT-01 }
-        date: { type: string, format: date, description: Sri Lanka calendar day, example: '2026-10-06' }
-        total_power_kw: { type: number, description: Sum of each installation's latest power_kw, example: 41.73 }
-        power_as_of: { type: string, format: date-time, nullable: true, description: Newest reading included in total_power_kw, example: '2026-10-06T04:30:00Z' }
-        day_energy_kwh: { type: number, description: 'Energy generated on date, from the cumulative energy_kwh', example: 182.4 }
+        date: { type: string, format: date, description: 'Sri Lanka calendar day summarised: [date 00:00 +05:30, next day 00:00 +05:30)', example: '2026-10-06' }
+        total_power_kw: { type: number, description: 'Sum of the latest power_kw in the day of every installation that reported that day (3 dp). For today, current power; for a past date, power at the end of that day', example: 41.73 }
+        power_as_of: { type: string, format: date-time, nullable: true, description: Newest timestamp among the readings in total_power_kw; null when no installation reported that day, example: '2026-10-06T04:30:00Z' }
+        day_energy_kwh: { type: number, description: "Sum per installation of (latest energy_kwh in the day − latest energy_kwh before the day, or the day's first if there is none), 3 dp", example: 182.4 }
 
     ProvinceGenerationSummary:
       type: object
