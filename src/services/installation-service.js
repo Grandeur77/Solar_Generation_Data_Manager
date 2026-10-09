@@ -61,13 +61,37 @@ async function registerInstallation({ installation_id, ...fields }) {
         { field: 'installation_id', location: 'body', issue: 'Already registered.', reference: `/installations/${installation_id}` },
       ]);
     }
-    if (err.code === 11000 && err.keyPattern && err.keyPattern.meter_id) {
-      throw new ApiError(409, 'METER_ID_TAKEN', `Meter ${fields.meter_id} is already fitted to another installation.`, [
-        { field: 'meter_id', location: 'body', issue: 'Already used by another installation.', reference: null },
-      ]);
-    }
-    throw err;
+    throw meterTakenOr(err, fields.meter_id);
   }
+}
+
+function meterTakenOr(err, meterId) {
+  if (err.code === 11000 && err.keyPattern && err.keyPattern.meter_id) {
+    return new ApiError(409, 'METER_ID_TAKEN', `Meter ${meterId} is already fitted to another installation.`, [
+      { field: 'meter_id', location: 'body', issue: 'Already used by another installation.', reference: null },
+    ]);
+  }
+  return err;
+}
+
+// Registry: whole-document replacement. Every writable field comes from the body (validated as
+// complete beforehand), so nothing from the old version survives by accident: there is no merge.
+// The jurisdiction copies are recalculated from the substation. Only server-managed fields are
+// kept: the meter's credential hash (a replacement must not lock the device out) and created_at.
+// Readings are untouched; they keep the jurisdiction they were recorded under.
+async function replaceInstallation(installationId, fields) {
+  const existing = await SolarInstallation.findById(installationId).select('+device_secret_hash');
+  if (!existing) throw notFound('INSTALLATION_NOT_FOUND', `No installation with id ${installationId}.`);
+  const jurisdiction = await jurisdictionFor(fields.substation_id);
+
+  existing.overwrite({ ...fields, ...jurisdiction, device_secret_hash: existing.device_secret_hash, created_at: existing.created_at });
+  try {
+    await existing.save();
+  } catch (err) {
+    throw meterTakenOr(err, fields.meter_id);
+  }
+  const lastReading = await getLastReading(installationId);
+  return { installation: existing, body: { ...existing.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null } };
 }
 
 // Every resource under /installations/{installation-id}/ needs its parent to exist first.
@@ -150,7 +174,21 @@ async function duplicateReadingError(installationId, timestamp) {
   );
 }
 
+// Registry: remove an installation. Find-and-delete is one atomic step, so of two simultaneous
+// DELETEs exactly one succeeds and the other gets 404. Its readings are NOT deleted (no cascade):
+// they are the evidence of what was generated, and deleting the asset must not erase that history.
+// Returns the composite as it was just before removal.
+async function deleteInstallation(installationId) {
+  const removed = await SolarInstallation.findOneAndDelete({ _id: installationId });
+  if (!removed) throw notFound('INSTALLATION_NOT_FOUND', `No installation with id ${installationId}.`);
+  const lastReading = await getLastReading(installationId);
+  return { ...removed.toJSON(), last_reading: lastReading ? lastReading.toJSON() : null };
+}
+
 module.exports = {
+  deleteInstallation,
+  ensureInstallationExists,
+  replaceInstallation,
   registerInstallation,
   createReading,
   listInstallations,

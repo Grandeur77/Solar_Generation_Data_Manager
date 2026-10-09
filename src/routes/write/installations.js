@@ -1,10 +1,16 @@
 const express = require('express');
-const { registerInstallation } = require('../../services/installation-service');
-const { validateInstallationBody } = require('../../utils/validate-installation');
+const {
+  registerInstallation,
+  replaceInstallation,
+  deleteInstallation,
+  ensureInstallationExists,
+} = require('../../services/installation-service');
+const { validateInstallationBody, validateReplacementBody } = require('../../utils/validate-installation');
 const { jsonBody } = require('../../middleware/json-body');
 const { requireDatabase } = require('../../middleware/require-database');
 const { adminAuthPlaceholder } = require('../../middleware/admin-auth-placeholder');
 const { strongEtag, httpDate } = require('../../utils/http-cache');
+const { ApiError } = require('../../utils/errors');
 
 const router = express.Router();
 
@@ -21,6 +27,39 @@ router.post('/', jsonBody, requireDatabase, adminAuthPlaceholder, async (req, re
     .set('ETag', strongEtag(body))
     .set('Last-Modified', httpDate(installation.updated_at))
     .json(body);
+});
+
+// PUT never creates: a missing installation is 404, checked before the body is looked at.
+async function installationMustExist(req, res, next) {
+  await ensureInstallationExists(req.params.installationId);
+  next();
+}
+
+// Registry: replace the whole installation. Every writable field must be sent; nothing is merged.
+router.put(
+  '/:installationId',
+  requireDatabase,
+  adminAuthPlaceholder,
+  installationMustExist,
+  jsonBody,
+  async (req, res) => {
+    const { installationId } = req.params;
+    const fields = validateReplacementBody(req.body, installationId);
+    const { installation, body } = await replaceInstallation(installationId, fields);
+    res.set('ETag', strongEtag(body)).set('Last-Modified', httpDate(installation.updated_at)).json(body);
+  }
+);
+
+// Registry: remove an installation. 200 with what was removed; a second DELETE finds nothing (404).
+// Its readings stay in the database as history.
+router.delete('/:installationId', requireDatabase, adminAuthPlaceholder, async (req, res) => {
+  res.json(await deleteInstallation(req.params.installationId));
+});
+
+// Partial updates are not offered: PUT replaces the whole installation, so PATCH is refused.
+router.patch('/:installationId', (req, res, next) => {
+  res.set('Allow', 'GET, HEAD, PUT, DELETE');
+  next(new ApiError(405, 'METHOD_NOT_ALLOWED', 'Partial updates are not supported: use PUT with the whole installation. Allowed: GET, HEAD, PUT, DELETE.'));
 });
 
 module.exports = router;

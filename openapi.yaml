@@ -16,7 +16,8 @@ info:
     `Location`, `ETag` and `Last-Modified`; 409 for a duplicate). Readings are append-only:
     PUT, PATCH and DELETE on a reading or on the readings collection return 405 with `Allow`.
     Registry: `POST /installations` (201 with `Location`, `ETag` and `Last-Modified`; 409 when
-    the installation or meter id is taken).
+    the installation or meter id is taken), `PUT /installations/{installation-id}` (whole-document
+    replacement, never a merge; PATCH returns 405) and `DELETE` (200, then 404; readings are kept).
 
     **Documented here but not live yet** (operations marked *(planned)*, plus):
     - Authentication: every route is currently public, including reading ingestion and the
@@ -25,7 +26,7 @@ info:
     - Conditional GET on reads: 304, and the `ETag`/`Last-Modified`/`Vary`/`Cache-Control` headers.
     - Pagination, sorting, time-window and status filters on installations and readings: both
       collections currently return a flat array.
-    - Replacing and deleting installations, and the generation summaries.
+    - `If-Match` / 412 on PUT and DELETE, and the generation summaries.
 
     Every response is `application/json`. Every error uses the `Error` schema.
     A well-formed filter value that matches nothing returns `200 []`; a malformed one returns 400.
@@ -457,8 +458,15 @@ paths:
     put:
       tags: [Installations]
       operationId: replaceInstallation
-      summary: (planned) Replace a whole installation (registry admin)
-      description: Whole-document replacement. Every writable field must be sent; nothing is merged. PUT never creates an installation.
+      summary: Replace a whole installation (registry admin)
+      description: |
+        Whole-document replacement. Every writable field must be sent; a missing one is a 400, never
+        filled in from the stored version (no merge). PUT never creates: an unknown id is 404, decided
+        before the body is read. `installation_id` may be left out; if sent it must equal the path
+        (otherwise 400 ID_MISMATCH). `district_id` and `province_id` are recalculated from the
+        substation. The meter's credential and `created_at` are kept; readings keep the jurisdiction
+        they were recorded under. Registry-admin authentication is a placeholder for now.
+        *(planned)* `If-Match` with a stale ETag → 412.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       requestBody:
@@ -475,19 +483,69 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InstallationComposite' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          description: VALIDATION_FAILED (including any missing field), ID_MISMATCH, UNKNOWN_SUBSTATION, or INVALID_JSON
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                partialBody:
+                  summary: A partial (merge-style) body is refused
+                  value:
+                    code: VALIDATION_FAILED
+                    message: The installation has 8 problems.
+                    details:
+                      - { field: meter_id, location: body, issue: Required., reference: null }
+                      - { field: substation_id, location: body, issue: Required., reference: null }
+                    more_info: /api-docs#error-codes
+                idMismatch:
+                  summary: The body names a different installation than the URL
+                  value:
+                    code: ID_MISMATCH
+                    message: The body's installation_id does not match the URL (INS-0001).
+                    details:
+                      - { field: installation_id, location: body, issue: 'Must equal INS-0001, or be left out.', reference: /installations/INS-0001 }
+                    more_info: /api-docs#error-codes
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/InstallationNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: METER_ID_TAKEN. The meter is fitted to another installation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: METER_ID_TAKEN, message: Meter MTR-000002 is already fitted to another installation., details: [ { field: meter_id, location: body, issue: Already used by another installation., reference: null } ], more_info: /api-docs#error-codes }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    patch:
+      tags: [Installations]
+      operationId: patchInstallationNotAllowed
+      summary: Not allowed. Use PUT with the whole installation (405)
+      security: []
+      responses:
+        '405':
+          description: METHOD_NOT_ALLOWED. Partial updates are not offered; PUT replaces the whole installation.
+          headers:
+            Allow:
+              description: The methods this URI does support
+              schema: { type: string, example: 'GET, HEAD, PUT, DELETE' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: METHOD_NOT_ALLOWED, message: 'Partial updates are not supported: use PUT with the whole installation. Allowed: GET, HEAD, PUT, DELETE.', details: [], more_info: /api-docs#error-codes }
     delete:
       tags: [Installations]
       operationId: deleteInstallation
-      summary: (planned) Remove an installation (registry admin). Its readings are kept.
+      summary: Remove an installation (registry admin). Its readings are kept.
+      description: |
+        Returns 200 with the installation as it was just before removal; a second DELETE returns 404.
+        There is no cascade: the installation's readings stay in the database as the record of what
+        was generated, still counted under the district they were recorded in. Because their parent
+        no longer exists, the scoped readings URIs then return 404.
+        Registry-admin authentication is a placeholder for now. *(planned)* `If-Match` with a stale ETag → 412.
       parameters:
         - $ref: '#/components/parameters/IfMatch'
       responses:
@@ -498,9 +556,10 @@ paths:
               schema: { $ref: '#/components/schemas/InstallationComposite' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404': { $ref: '#/components/responses/InstallationNotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /installations/{installation-id}/last-known-reading:
     parameters:
