@@ -62,6 +62,8 @@ async function call(method, urlPath, { token, headers = {}, json, text } = {}) {
 
 // Shared assertions.
 const STRONG_ETAG = /^"[0-9a-f]{40}"$/;
+// Vercel's edge compresses larger GET responses and correctly weakens our ETag to W/"<same hash>".
+const SCOPED_GET_ETAG = /^(W\/)?"[0-9a-f]{40}"$/;
 function expectStatus(res, status) {
   expect(res.status === status, `expected ${status}, got ${res.status}${res.body && res.body.code ? ` (${res.body.code})` : ''}`);
 }
@@ -75,7 +77,7 @@ function expectError(res, status, code) {
 }
 function expectScopedGet(res) {
   expectStatus(res, 200);
-  expect(STRONG_ETAG.test(res.headers.get('etag') || ''), `no strong ETag (got ${res.headers.get('etag')})`);
+  expect(SCOPED_GET_ETAG.test(res.headers.get('etag') || ''), `no strong (or CDN-weakened) ETag (got ${res.headers.get('etag')})`);
   expect(res.headers.get('cache-control') === 'private, no-cache', `Cache-Control is ${res.headers.get('cache-control')}`);
   const vary = res.headers.get('vary') || '';
   expect(/\bAccept\b/.test(vary) && /\bAuthorization\b/.test(vary), `Vary is "${vary}"`);
