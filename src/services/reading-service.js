@@ -47,4 +47,9 @@ async function insertReading(data) {
   return GenerationReading.create(data);
 }
 
-module.exports = { getLastReading, listReadings, findReading, findReadingAt, findNeighbours, insertReading };
+// Only used to take back a reading this request has just stored (see createReading).
+async function removeReading(readingId) {
+  return GenerationReading.deleteOne({ _id: readingId });
+}
+
+module.exports = { getLastReading, listReadings, findReading, findReadingAt, findNeighbours, insertReading, removeReading };

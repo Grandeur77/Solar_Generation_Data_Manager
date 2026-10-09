@@ -1,4 +1,5 @@
 const express = require('express');
+const { summaryMethodNotAllowed } = require('../../middleware/summary-method-not-allowed');
 const { listProvinces, getProvince, ensureProvinceExists } = require('../../services/province-service');
 const { provinceGenerationSummary } = require('../../services/summary-service');
 const { readSummaryDate } = require('../../utils/query');
@@ -24,5 +25,13 @@ router.get('/:provinceId/generation-summary', async (req, res) => {
   await ensureProvinceExists(provinceId);
   res.json(await provinceGenerationSummary(provinceId, readSummaryDate(req.query)));
 });
+
+// Each method listed on its own (not .all), so OPTIONS keeps Express's default handling.
+router
+  .route('/:provinceId/generation-summary')
+  .post(summaryMethodNotAllowed)
+  .put(summaryMethodNotAllowed)
+  .patch(summaryMethodNotAllowed)
+  .delete(summaryMethodNotAllowed);
 
 module.exports = router;

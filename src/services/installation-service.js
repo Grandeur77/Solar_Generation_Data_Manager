@@ -9,6 +9,7 @@ const {
   findReadingAt,
   findNeighbours,
   insertReading,
+  removeReading,
 } = require('./reading-service');
 const { plausibilityProblems } = require('../utils/reading-rules');
 const { newest } = require('../utils/http-cache');
@@ -159,8 +160,9 @@ async function createReading(installationId, values) {
     throw new ApiError(400, 'READING_IMPLAUSIBLE', `${problems.length} ${noun} physically implausible for this installation.`, problems);
   }
 
+  let reading;
   try {
-    return await insertReading({
+    reading = await insertReading({
       ...values,
       installation_id: installation._id,
       received_at: new Date(),
@@ -177,6 +179,18 @@ async function createReading(installationId, values) {
     }
     throw err;
   }
+
+  // Two readings sent at the same moment can each pass the energy check above before the other
+  // is stored, leaving a total that goes down. Checking again now that ours is stored catches
+  // that: if a neighbour stored meanwhile contradicts it, ours is taken back and refused, so the
+  // stored totals never decrease. (Both racers may be refused; a retry is then checked normally.)
+  const after = await findNeighbours(installationId, values.timestamp);
+  const conflicts = plausibilityProblems(installation, values, { ...after, now: Date.now() }).filter((p) => p.field === 'energy_kwh');
+  if (conflicts.length > 0) {
+    await removeReading(reading._id);
+    throw new ApiError(400, 'READING_IMPLAUSIBLE', 'energy_kwh conflicts with a reading stored at the same time.', conflicts);
+  }
+  return reading;
 }
 
 async function duplicateReadingError(installationId, timestamp) {

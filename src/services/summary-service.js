@@ -37,33 +37,36 @@ async function currentTotalPower(scope, { start, end }) {
 }
 
 // Energy generated across the scope in one Sri Lanka day.
-// energy_kwh is a cumulative meter total, so per installation:
-//   day energy = total at its latest reading in the day − total at its latest reading before the day
-//   (or, with nothing before the day, its first reading in the day), then summed.
-// The meter total never decreases (the write path rejects a lower value, and verify-seed checks it),
-// so "latest" is simply the highest total and "first" the lowest: $max / $min need no sort.
+// energy_kwh is a cumulative meter total, so a reading's energy since the reading before it is
+// the difference between the two totals. Day energy is the sum of those increases for every
+// reading in the day; the first one compares with the installation's last reading before the
+// day, so energy from midnight to the first reading is counted.
+// A drop (a replaced or reset meter, or a bad value) counts as 0, never as negative energy:
+// the next increase is then measured from the new, lower total.
 async function dayEnergy(scope, { start, end }) {
-  const inDay = { $gte: ['$timestamp', start] };
   const [row] = await GenerationReading.aggregate([
-    // 1. Everything up to the end of the day; no lower bound, because the baseline can be from any earlier day.
+    // 1. Everything up to the end of the day; no lower bound, because the reading before the
+    //    day's first can be from any earlier day.
     { $match: { ...scope, timestamp: { $lt: end } } },
-    // 2. Per installation: highest and lowest total inside the day, and highest total before it.
-    //    A null from $cond is ignored by $max / $min, so each one only sees its own readings.
+    // 2. Give every reading the total of the installation's reading just before it, by timestamp
+    //    (null for its very first reading).
     {
-      $group: {
-        _id: '$installation_id',
-        day_last_kwh: { $max: { $cond: [inDay, '$energy_kwh', null] } },
-        day_first_kwh: { $min: { $cond: [inDay, '$energy_kwh', null] } },
-        before_kwh: { $max: { $cond: [inDay, null, '$energy_kwh'] } },
+      $setWindowFields: {
+        partitionBy: '$installation_id',
+        sortBy: { timestamp: 1 },
+        output: { previous_kwh: { $shift: { output: '$energy_kwh', by: -1 } } },
       },
     },
-    // 3. Only installations that reported in the day.
-    { $match: { day_last_kwh: { $ne: null } } },
-    // 4. Sum (end − baseline), the baseline being the last total before the day, else the day's first.
+    // 3. Only the day's readings now; each still knows the total before it.
+    { $match: { timestamp: { $gte: start } } },
+    // 4. Add up the increases. An installation's first reading ever has nothing to compare with
+    //    (0), and a drop is 0, not negative.
     {
       $group: {
         _id: null,
-        day_energy_kwh: { $sum: { $subtract: ['$day_last_kwh', { $ifNull: ['$before_kwh', '$day_first_kwh'] }] } },
+        day_energy_kwh: {
+          $sum: { $cond: [{ $eq: ['$previous_kwh', null] }, 0, { $max: [0, { $subtract: ['$energy_kwh', '$previous_kwh'] }] }] },
+        },
       },
     },
     // 5. Round to 3 dp (1 Wh): 1020.1 − 1000 is 20.100000000000023 in floating point.
@@ -85,11 +88,14 @@ async function peakPower(scope, { start, end }) {
     { $group: { _id: { slot, installation_id: '$installation_id' }, power_kw: { $max: '$power_kw' } } },
     // 3. The scope's combined output in each slot.
     { $group: { _id: '$_id.slot', total_kw: { $sum: '$power_kw' } } },
+    // A day with no generation has no peak: 0 and null, rather than "0 kW at 23:45".
+    { $match: { total_kw: { $gt: 0 } } },
     // 4. Highest first; on a tie, the earliest slot.
     { $sort: { total_kw: -1, _id: 1 } },
     { $limit: 1 },
     { $project: { _id: 0, peak_power_kw: { $round: ['$total_kw', 3] }, peak_at: '$_id' } },
   ]);
+  // No reading, or nothing above 0 all day.
   return row || { peak_power_kw: 0, peak_at: null };
 }
 

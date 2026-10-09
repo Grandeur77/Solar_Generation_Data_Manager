@@ -184,6 +184,34 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Summaries]
+      operationId: postProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    put:
+      tags: [Summaries]
+      operationId: putProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    patch:
+      tags: [Summaries]
+      operationId: patchProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    delete:
+      tags: [Summaries]
+      operationId: deleteProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
   /districts:
     get:
@@ -269,6 +297,34 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Summaries]
+      operationId: postDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    put:
+      tags: [Summaries]
+      operationId: putDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    patch:
+      tags: [Summaries]
+      operationId: patchDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    delete:
+      tags: [Summaries]
+      operationId: deleteDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
   /grid-substations:
     get:
@@ -1125,6 +1181,14 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: METHOD_NOT_ALLOWED, message: 'Readings are append-only: DELETE is not allowed here. Allowed: GET, HEAD.', details: [], more_info: /api-docs#error-codes }
+    MethodNotAllowedSummary:
+      description: METHOD_NOT_ALLOWED. A generation summary is worked out on request and is read-only; Allow is GET, HEAD.
+      headers:
+        Allow: { $ref: '#/components/headers/AllowReading' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: METHOD_NOT_ALLOWED, message: 'A generation summary is read-only: POST is not allowed here. Allowed: GET, HEAD.', details: [], more_info: /api-docs#error-codes }
     MethodNotAllowedCollection:
       description: METHOD_NOT_ALLOWED. A reading history is never replaced or erased; Allow is GET, HEAD, POST.
       headers:
@@ -1285,9 +1349,9 @@ components:
         date: { type: string, format: date, description: 'Sri Lanka calendar day summarised: [date 00:00 +05:30, next day 00:00 +05:30)', example: '2026-10-06' }
         total_power_kw: { type: number, description: 'Sum of the latest power_kw in the day of every installation that reported that day (3 dp). For today, current power; for a past date, power at the end of that day', example: 41.73 }
         power_as_of: { type: string, format: date-time, nullable: true, description: Newest timestamp among the readings in total_power_kw; null when no installation reported that day, example: '2026-10-06T04:30:00Z' }
-        day_energy_kwh: { type: number, description: "Sum per installation of (latest energy_kwh in the day − latest energy_kwh before the day, or the day's first if there is none), 3 dp", example: 182.4 }
+        day_energy_kwh: { type: number, description: "Sum of the increases in cumulative energy_kwh for every reading in the day, each compared with the installation's previous reading (from before the day if needed). A drop (meter reset or replacement) counts as 0, never negative. 3 dp", example: 182.4 }
         peak_power_kw: { type: number, description: 'Highest combined power_kw in one 15-minute slot of the day (one value per installation per slot), 3 dp; 0 when nothing reported', example: 58.2 }
-        peak_at: { type: string, format: date-time, nullable: true, description: 'Start of that slot; the earliest on a tie; null when nothing reported', example: '2026-10-06T06:30:00.000Z' }
+        peak_at: { type: string, format: date-time, nullable: true, description: 'Start of that slot; the earliest on a tie; null when nothing was generated (peak_power_kw 0)', example: '2026-10-06T06:30:00.000Z' }
         installed_capacity_kw: { type: number, description: 'Sum of capacity_kw of every registered installation (active or inactive), from the registry as it is now', example: 96 }
         capacity_utilisation: { type: number, nullable: true, description: 'total_power_kw ÷ installed_capacity_kw, 3 dp (0.15 = 15%). Can slightly exceed 1. null when there are no installations', example: 0.435 }
         installation_count: { type: integer, description: Registered installations, example: 22 }
