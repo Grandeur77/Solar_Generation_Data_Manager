@@ -40,7 +40,6 @@ app.use((req, res, next) => {
 app.use(helmet());
 // Before authentication, so an allowed browser's preflight (which carries no token) is answered.
 app.use(corsPolicy);
-app.use(rejectOperatorKeysInQuery);
 
 // The docs page is HTML and the spec is YAML, so they sit before the JSON-only check.
 app.use('/api-docs', docsRouter);
@@ -51,6 +50,9 @@ app.use('/api-docs', docsRouter);
 // (405), or anything about its Accept header (406). /health, /api-docs and /auth/tokens stay
 // public, and a path that is no resource at all is still 404.
 app.use(['/provinces', '/districts', '/grid-substations', '/installations'], privateCaching, authenticate);
+// After authentication, so an anonymous caller gets 401 before any query rule is checked. Without a
+// path it still covers every request below it, public ones (/health, /auth/tokens) included.
+app.use(rejectOperatorKeysInQuery);
 
 app.use(acceptJson);
 app.use('/health', healthRouter);

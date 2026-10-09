@@ -189,6 +189,8 @@ paths:
     get:
       tags: [Hierarchy]
       operationId: listProvinces
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: List provinces in the caller's jurisdiction
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -217,6 +219,8 @@ paths:
     get:
       tags: [Hierarchy]
       operationId: getProvince
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: Get one province
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -245,6 +249,8 @@ paths:
     get:
       tags: [Summaries]
       operationId: getProvinceGenerationSummary
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: Current total power and a day's energy across a province
       parameters:
         - $ref: '#/components/parameters/Date'
@@ -270,36 +276,46 @@ paths:
     post:
       tags: [Summaries]
       operationId: postProvinceGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     put:
       tags: [Summaries]
       operationId: putProvinceGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     patch:
       tags: [Summaries]
       operationId: patchProvinceGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     delete:
       tags: [Summaries]
       operationId: deleteProvinceGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
   /districts:
     get:
       tags: [Hierarchy]
       operationId: listDistricts
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: List districts in the caller's jurisdiction
       parameters:
         - $ref: '#/components/parameters/ProvinceIdFilter'
@@ -330,6 +346,8 @@ paths:
     get:
       tags: [Hierarchy]
       operationId: getDistrict
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: Get one district
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -358,6 +376,8 @@ paths:
     get:
       tags: [Summaries]
       operationId: getDistrictGenerationSummary
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: Current total power and a day's energy across a district
       parameters:
         - $ref: '#/components/parameters/Date'
@@ -383,36 +403,46 @@ paths:
     post:
       tags: [Summaries]
       operationId: postDistrictGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     put:
       tags: [Summaries]
       operationId: putDistrictGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     patch:
       tags: [Summaries]
       operationId: patchDistrictGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     delete:
       tags: [Summaries]
       operationId: deleteDistrictGenerationSummaryNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
   /grid-substations:
     get:
       tags: [Hierarchy]
       operationId: listGridSubstations
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: List grid substations in the caller's jurisdiction
       parameters:
         - $ref: '#/components/parameters/ProvinceIdFilter'
@@ -444,6 +474,8 @@ paths:
     get:
       tags: [Hierarchy]
       operationId: getGridSubstation
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: Get one grid substation
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -470,8 +502,11 @@ paths:
     get:
       tags: [Installations]
       operationId: listInstallations
+      x-required-scope: analyst-read-by-jurisdiction
       summary: List installations in the caller's jurisdiction (paginated)
       description: |
+        **Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403.
+
         One page as `{count, next, previous, results}`, items in the plain shape (no last_reading).
         Filters combine (AND); every malformed filter or page value is reported in one 400, then the
         sort is checked. Links keep every filter and the sort. Ties are ordered by installation_id.
@@ -526,8 +561,11 @@ paths:
     post:
       tags: [Installations]
       operationId: createInstallation
+      x-required-scope: asset-admin
       summary: Register a new installation (registry admin)
       description: |
+        **Scope:** `asset-admin` (the registry admin). Any other token gets 403 `INSUFFICIENT_SCOPE`.
+
         The admin supplies the readable `installation_id`. `district_id` and `province_id` are copied
         from the substation by the server; sending them (or `last_reading`) is a 400.
         Registry-admin authentication is a placeholder for now (every request is accepted).
@@ -605,6 +643,8 @@ paths:
     get:
       tags: [Installations]
       operationId: getInstallation
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: Get an installation with its latest reading (composite)
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -629,8 +669,11 @@ paths:
     put:
       tags: [Installations]
       operationId: replaceInstallation
+      x-required-scope: asset-admin
       summary: Replace a whole installation (registry admin)
       description: |
+        **Scope:** `asset-admin` (the registry admin). Any other token gets 403 `INSUFFICIENT_SCOPE`.
+
         Whole-document replacement. Every writable field must be sent; a missing one is a 400, never
         filled in from the stored version (no merge). PUT never creates: an unknown id is 404, decided
         before the body is read. `installation_id` may be left out; if sent it must equal the path
@@ -695,9 +738,11 @@ paths:
     patch:
       tags: [Installations]
       operationId: patchInstallationNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. Use PUT with the whole installation (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405':
           description: METHOD_NOT_ALLOWED. Partial updates are not offered; PUT replaces the whole installation.
           headers:
@@ -711,8 +756,11 @@ paths:
     delete:
       tags: [Installations]
       operationId: deleteInstallation
+      x-required-scope: asset-admin
       summary: Remove an installation (registry admin). Its readings are kept.
       description: |
+        **Scope:** `asset-admin` (the registry admin). Any other token gets 403 `INSUFFICIENT_SCOPE`.
+
         Returns 200 with the installation as it was just before removal; a second DELETE returns 404.
         There is no cascade: the installation's readings stay in the database as the record of what
         was generated, still counted under the district they were recorded in. Because their parent
@@ -740,6 +788,8 @@ paths:
     get:
       tags: [Readings]
       operationId: getLastKnownReading
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: The most recent reading of an installation (derived)
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -779,8 +829,11 @@ paths:
     get:
       tags: [Readings]
       operationId: listReadings
+      x-required-scope: analyst-read-by-jurisdiction
       summary: Generation history of one installation (paginated)
       description: |
+        **Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403.
+
         One page of the history, newest first, as `{count, next, previous, results}`. `count` is the
         total across all pages. `next` is null on the last page and `previous` is null on page 1; a page
         past the end returns empty `results` with `previous` pointing at the last page that has items.
@@ -857,8 +910,11 @@ paths:
     post:
       tags: [Readings]
       operationId: createReading
+      x-required-scope: installation-write
       summary: A meter pushes a new reading for its own installation
       description: |
+        **Scope:** `installation-write`, and only for the meter's own installation (the token's `sub`); another installation is 403 `INSTALLATION_MISMATCH`. An installation that has been deactivated is 403 `ACCOUNT_INACTIVE`, even with a token issued before the deactivation.
+
         The installation comes from the path, never the body: an `installation_id` in the body is
         rejected with 400. The server sets `reading_id`, `received_at` (its own clock) and the
         jurisdiction ids (copied from the installation); sending any of them is also a 400.
@@ -942,23 +998,29 @@ paths:
     put:
       tags: [Readings]
       operationId: replaceReadingsNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. Readings are append-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
     patch:
       tags: [Readings]
       operationId: patchReadingsNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. Readings are append-only (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
     delete:
       tags: [Readings]
       operationId: deleteReadingsNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading history is never erased (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
 
   /installations/{installation-id}/readings/{reading-id}:
@@ -968,6 +1030,8 @@ paths:
     get:
       tags: [Readings]
       operationId: getReading
+      x-required-scope: analyst-read-by-jurisdiction
+      description: "**Scope:** `analyst-read-by-jurisdiction` (SLSEA users and the registry admin), cut to the caller's jurisdiction. A meter's token gets 403."
       summary: One reading (the target of a 201 Location)
       parameters:
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -1003,23 +1067,29 @@ paths:
     put:
       tags: [Readings]
       operationId: replaceReadingNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading is never replaced (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
     patch:
       tags: [Readings]
       operationId: patchReadingNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading is never edited (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
     delete:
       tags: [Readings]
       operationId: deleteReadingNotAllowed
+      x-required-scope: none (valid token only)
+      description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading is never deleted (405)
-      security: []
       responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
 
 components:
@@ -1028,7 +1098,23 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT bearer token. Scopes (installation-write, analyst-read-by-jurisdiction, asset-admin) are documented in Step 9.9.
+      description: |
+        A JWT from `POST /auth/tokens`, sent as `Authorization: Bearer <token>`. Signed with HS256;
+        the API checks the signature (HS256 only), `iss` = `slsea-solar-api/auth`,
+        `aud` = `slsea-solar-api`, and `exp` (30 s clock tolerance), then the scope each operation
+        needs (its "Scope" line and `x-required-scope`).
+
+        | Scope | Who gets it | Lifetime | Allows |
+        |---|---|---|---|
+        | `installation-write` | a meter (`meter_id` + device secret); `sub` is its installation | 24 h | `POST /installations/{installation-id}/readings` for that installation only. No reads. |
+        | `analyst-read-by-jurisdiction` | SLSEA users (`email` + password); the token carries `jurisdiction` (national, province or district) | 1 h | every GET, cut to the jurisdiction |
+        | `asset-admin` | the registry admin (who also gets `analyst-read-by-jurisdiction`, national) | 15 min | `POST /installations`, `PUT` and `DELETE /installations/{installation-id}` |
+
+        401 means no usable token (missing, invalid or expired), always with `WWW-Authenticate`.
+        403 means a valid token that is not allowed: `INSUFFICIENT_SCOPE` (with
+        `WWW-Authenticate: Bearer ... error="insufficient_scope", scope="..."`), `INSTALLATION_MISMATCH`,
+        or `OUTSIDE_JURISDICTION`. Scopes are listed here and per operation because OpenAPI 3.0 can only
+        declare scopes on OAuth 2 flows, and this token endpoint is not an OAuth token endpoint.
 
   parameters:
     ProvinceId:
