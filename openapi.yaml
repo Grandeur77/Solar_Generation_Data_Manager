@@ -116,12 +116,17 @@ paths:
       responses:
         '200':
           description: The service is running and the database answers
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '503':
           description: The database cannot be reached (`SERVICE_UNAVAILABLE`)
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -158,6 +163,9 @@ paths:
               oneOf:
                 - $ref: '#/components/schemas/UserCredentials'
                 - $ref: '#/components/schemas/DeviceCredentials'
+            examples:
+              user: { summary: An SLSEA user or the registry admin, value: { email: colombo.analyst@slsea.example, password: '<the account password>' } }
+              meter: { summary: A meter, value: { meter_id: MTR-000001, device_secret: '<the meter device secret>' } }
       responses:
         '201':
           description: A new token
@@ -170,6 +178,7 @@ paths:
         '401':
           description: INVALID_CREDENTIALS. Unknown email or meter, or wrong password or secret (one message for all).
           headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
             WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
           content:
             application/json:
@@ -177,14 +186,77 @@ paths:
               example: { code: INVALID_CREDENTIALS, message: The credentials are not valid., details: [], more_info: /api-docs#error-codes }
         '403':
           description: ACCOUNT_INACTIVE. Correct credentials, but the user or installation is inactive. A meter of an installation registered through the API has no secret yet and gets 401.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+    get:
+      tags: [Auth]
+      operationId: getTokensNotAllowed
+      summary: Not allowed. Tokens can only be created (405)
+      security: []
+      responses:
+        '405':
+          description: METHOD_NOT_ALLOWED. Allow is POST.
+          headers:
+            Allow: { $ref: '#/components/headers/AllowTokens' }
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: METHOD_NOT_ALLOWED, message: 'Tokens can only be created: GET is not allowed here. Allowed: POST.', details: [], more_info: /api-docs#error-codes }
+    put:
+      tags: [Auth]
+      operationId: putTokensNotAllowed
+      summary: Not allowed. Tokens can only be created (405)
+      security: []
+      responses:
+        '405':
+          description: METHOD_NOT_ALLOWED. Allow is POST.
+          headers:
+            Allow: { $ref: '#/components/headers/AllowTokens' }
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: METHOD_NOT_ALLOWED, message: 'Tokens can only be created: GET is not allowed here. Allowed: POST.', details: [], more_info: /api-docs#error-codes }
+    patch:
+      tags: [Auth]
+      operationId: patchTokensNotAllowed
+      summary: Not allowed. Tokens can only be created (405)
+      security: []
+      responses:
+        '405':
+          description: METHOD_NOT_ALLOWED. Allow is POST.
+          headers:
+            Allow: { $ref: '#/components/headers/AllowTokens' }
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: METHOD_NOT_ALLOWED, message: 'Tokens can only be created: GET is not allowed here. Allowed: POST.', details: [], more_info: /api-docs#error-codes }
+    delete:
+      tags: [Auth]
+      operationId: deleteTokensNotAllowed
+      summary: Not allowed. Tokens can only be created (405)
+      security: []
+      responses:
+        '405':
+          description: METHOD_NOT_ALLOWED. Allow is POST.
+          headers:
+            Allow: { $ref: '#/components/headers/AllowTokens' }
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: METHOD_NOT_ALLOWED, message: 'Tokens can only be created: GET is not allowed here. Allowed: POST.', details: [], more_info: /api-docs#error-codes }
   /provinces:
     get:
       tags: [Hierarchy]
@@ -208,6 +280,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Province' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
@@ -237,6 +310,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Province' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/ProvinceNotFound' }
@@ -280,6 +354,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     put:
@@ -289,6 +364,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     patch:
@@ -298,6 +374,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     delete:
@@ -307,6 +384,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
@@ -364,6 +442,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/District' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/DistrictNotFound' }
@@ -407,6 +486,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     put:
@@ -416,6 +496,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     patch:
@@ -425,6 +506,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
     delete:
@@ -434,6 +516,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A generation summary is read-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
@@ -492,6 +575,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/GridSubstation' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/SubstationNotFound' }
@@ -533,6 +617,9 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '400':
           description: INVALID_QUERY_PARAMETER (a malformed filter, status or page value; all reported at once) or INVALID_SORT_FIELD (reference lists installation_id, name, capacity_kw)
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -575,10 +662,13 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/InstallationCreate' }
+            example: { installation_id: INS-0221, name: Kolonnawa rooftop 221, meter_id: MTR-000221, substation_id: SS-001, capacity_kw: 5, status: active, commissioned_at: '2026-10-01T00:00:00Z', address: 'No. 12, Station Road, Kolonnawa', latitude: 6.9329, longitude: 79.8885 }
       responses:
         '201':
           description: Created. The body is the new installation as the composite (last_reading is null).
           headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Vary: { $ref: '#/components/headers/Vary' }
             Location: { $ref: '#/components/headers/Location' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
@@ -587,6 +677,9 @@ paths:
               schema: { $ref: '#/components/schemas/InstallationComposite' }
         '400':
           description: VALIDATION_FAILED (one details entry per field), UNKNOWN_SUBSTATION (substation_id names no substation; 400 because the problem is a body field, not the URI), or INVALID_JSON
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -613,6 +706,9 @@ paths:
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '409':
           description: INSTALLATION_ID_TAKEN (reference is the existing installation) or METER_ID_TAKEN
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -661,6 +757,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/InstallationComposite' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/InstallationNotFound' }
@@ -689,10 +786,13 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/InstallationReplace' }
+            example: { name: Kolonnawa rooftop 221 (renamed), meter_id: MTR-000221, substation_id: SS-001, capacity_kw: 5, status: active, commissioned_at: '2026-10-01T00:00:00Z', address: 'No. 12, Station Road, Kolonnawa', latitude: 6.9329, longitude: 79.8885 }
       responses:
         '200':
           description: Replaced. The body is the installation as the composite.
           headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Vary: { $ref: '#/components/headers/Vary' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
           content:
@@ -700,6 +800,9 @@ paths:
               schema: { $ref: '#/components/schemas/InstallationComposite' }
         '400':
           description: VALIDATION_FAILED (including any missing field), ID_MISMATCH, UNKNOWN_SUBSTATION, or INVALID_JSON
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -727,6 +830,9 @@ paths:
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '409':
           description: METER_ID_TAKEN. The meter is fitted to another installation.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -742,10 +848,13 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. Use PUT with the whole installation (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405':
           description: METHOD_NOT_ALLOWED. Partial updates are not offered; PUT replaces the whole installation.
           headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
             Allow:
               description: The methods this URI does support
               schema: { type: string, example: 'GET, HEAD, PUT, DELETE' }
@@ -772,9 +881,13 @@ paths:
       responses:
         '200':
           description: Removed. The body is the installation as the composite, as it was just before removal. A second DELETE returns 404.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Vary: { $ref: '#/components/headers/Vary' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InstallationComposite' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/InstallationNotFound' }
@@ -806,10 +919,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Reading' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
           description: INSTALLATION_NOT_FOUND, or NO_READINGS_YET when the installation exists but has no readings
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -872,6 +989,9 @@ paths:
             Every bad value is reported in one response. INVALID_SORT_FIELD: sort is not exactly one of
             the allowed fields (reference lists them). INVALID_TIME_WINDOW: from is not earlier than to.
             Checked in that order.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -940,10 +1060,13 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/ReadingCreate' }
+            example: { timestamp: '2026-10-06T12:45:00+05:30', power_kw: 3.42, energy_kwh: 1021.6, voltage: 231.4 }
       responses:
         '201':
           description: Created. The body is the stored reading.
           headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControl' }
+            Vary: { $ref: '#/components/headers/Vary' }
             Location: { $ref: '#/components/headers/Location' }
             ETag: { $ref: '#/components/headers/ETag' }
             Last-Modified: { $ref: '#/components/headers/LastModified' }
@@ -952,6 +1075,9 @@ paths:
               schema: { $ref: '#/components/schemas/Reading' }
         '400':
           description: VALIDATION_FAILED (structure, one details entry per problem), READING_IMPLAUSIBLE (physically impossible values), or INVALID_JSON when the body cannot be parsed
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -983,6 +1109,9 @@ paths:
         '406': { $ref: '#/components/responses/NotAcceptable' }
         '409':
           description: READING_DUPLICATE. This installation already has a reading at this instant; reference is its URI.
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1002,6 +1131,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. Readings are append-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
     patch:
@@ -1011,6 +1141,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. Readings are append-only (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
     delete:
@@ -1020,6 +1151,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading history is never erased (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedCollection' }
 
@@ -1048,10 +1180,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Reading' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
           description: INSTALLATION_NOT_FOUND when the parent is missing, or READING_NOT_FOUND when this installation has no such reading (including a real reading id that belongs to another installation)
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+            Vary: { $ref: '#/components/headers/VaryScoped' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1071,6 +1207,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading is never replaced (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
     patch:
@@ -1080,6 +1217,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading is never edited (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
     delete:
@@ -1089,6 +1227,7 @@ paths:
       description: "**Scope:** none needed, but a valid token is: without one the answer is 401, with one 405 (the method is never allowed here)."
       summary: Not allowed. A reading is never deleted (405)
       responses:
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '405': { $ref: '#/components/responses/MethodNotAllowedReading' }
 
@@ -1161,7 +1300,7 @@ components:
       name: status
       in: query
       description: Only installations with this status. Any other value, or the parameter given twice → 400.
-      schema: { type: string, enum: [active, inactive] }
+      schema: { type: string, enum: [active, inactive], example: active }
     From:
       name: from
       in: query
@@ -1185,6 +1324,7 @@ components:
         type: string
         enum: [timestamp, -timestamp, power_kw, -power_kw, energy_kwh, -energy_kwh]
         default: -timestamp
+        example: '-power_kw'
     InstallationSort:
       name: sort
       in: query
@@ -1193,15 +1333,17 @@ components:
         type: string
         enum: [installation_id, -installation_id, name, -name, capacity_kw, -capacity_kw]
         default: installation_id
+        example: '-capacity_kw'
     Page:
       name: page
       in: query
-      schema: { type: integer, minimum: 1, default: 1 }
+      description: Page number, from 1. A page past the end is 200 with empty results.
+      schema: { type: integer, minimum: 1, default: 1, example: 2 }
     PageSize:
       name: page-size
       in: query
       description: Items per page. Above 100 is a 400, never silently reduced.
-      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50, example: 20 }
     Date:
       name: date
       in: query
@@ -1227,6 +1369,15 @@ components:
     CacheControlNoStore:
       description: Never stored by any cache
       schema: { type: string, example: no-store }
+    VaryScoped:
+      description: On the guarded paths (/provinces, /districts, /grid-substations, /installations), even on errors, because the answer depends on the token and the Accept header. Not sent by /health or /auth/tokens.
+      schema: { type: string, example: 'Accept, Authorization' }
+    WWWAuthenticateInsufficientScope:
+      description: Only for 403 INSUFFICIENT_SCOPE, naming the scope that was needed
+      schema: { type: string, example: 'Bearer realm="slsea-solar-api", error="insufficient_scope", scope="asset-admin"' }
+    AllowTokens:
+      description: The methods this URI does support
+      schema: { type: string, example: POST }
     RetryAfter:
       description: Seconds to wait before trying again
       schema: { type: integer, example: 60 }
@@ -1262,45 +1413,75 @@ components:
         Cache-Control: { $ref: '#/components/headers/CacheControl' }
     BadRequest:
       description: Invalid body or query value
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: VALIDATION_FAILED, message: The installation has 1 problem., details: [{ field: capacity_kw, location: body, issue: Must be a number greater than 0., reference: null }], more_info: /api-docs#error-codes }
     Unauthorized:
       description: Missing, invalid or expired token
       headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
         WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: AUTHENTICATION_REQUIRED, message: A bearer token is required., details: [], more_info: /api-docs#error-codes }
     TooManyRequests:
       description: TOO_MANY_REQUESTS. Too many token requests from this client; wait for Retry-After seconds.
       headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
         Retry-After: { $ref: '#/components/headers/RetryAfter' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: TOO_MANY_REQUESTS, message: Too many failed attempts. Try again in 600 seconds., details: [], more_info: /api-docs#error-codes }
     Forbidden:
       description: Valid token but not allowed (scope, installation or jurisdiction)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
+        WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticateInsufficientScope' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: INSUFFICIENT_SCOPE, message: This token is not allowed to make this request., details: [{ field: Authorization, location: header, issue: Requires the asset-admin scope., reference: null }], more_info: /api-docs#error-codes }
     NotFound:
       description: The member or its parent does not exist
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: INSTALLATION_NOT_FOUND, message: No installation with id INS-9999., details: [], more_info: /api-docs#error-codes }
     NotAcceptable:
       description: The Accept header excludes application/json
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: NOT_ACCEPTABLE, message: This API only produces application/json., details: [], more_info: /api-docs#error-codes }
     Conflict:
       description: Conflicts with existing data (duplicate reading, installation_id or meter_id)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: READING_DUPLICATE, message: Installation INS-0001 already has a reading at 2026-10-06T12:30:00.000Z., details: [{ field: timestamp, location: body, issue: A reading for this installation and timestamp already exists., reference: /installations/INS-0001/readings/000000000000000000000005 }], more_info: /api-docs#error-codes }
     PreconditionFailed:
       description: PRECONDITION_FAILED. If-Match does not match the installation's current ETag (strong comparison; W/ tags never match). Nothing was changed.
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1312,16 +1493,27 @@ components:
             more_info: /api-docs#error-codes
     PayloadTooLarge:
       description: The request body is over 100 KB
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: PAYLOAD_TOO_LARGE, message: The request body is larger than 100 KB., details: [], more_info: /api-docs#error-codes }
     UnsupportedMediaType:
       description: The request body is not application/json
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { code: UNSUPPORTED_MEDIA_TYPE, message: The request body must be application/json., details: [], more_info: /api-docs#error-codes }
     InvalidQueryParameter:
       description: A filter value is malformed or given more than once (INVALID_QUERY_PARAMETER)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1333,24 +1525,36 @@ components:
             more_info: /api-docs#error-codes
     ProvinceNotFound:
       description: No province with this id (PROVINCE_NOT_FOUND)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: PROVINCE_NOT_FOUND, message: No province with id PV-99., details: [], more_info: /api-docs#error-codes }
     DistrictNotFound:
       description: No district with this id (DISTRICT_NOT_FOUND)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: DISTRICT_NOT_FOUND, message: No district with id DT-99., details: [], more_info: /api-docs#error-codes }
     SubstationNotFound:
       description: No grid substation with this id (SUBSTATION_NOT_FOUND)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: SUBSTATION_NOT_FOUND, message: No grid substation with id SS-999., details: [], more_info: /api-docs#error-codes }
     InstallationNotFound:
       description: No installation with this id; for a scoped resource, the parent is missing (INSTALLATION_NOT_FOUND)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1358,6 +1562,8 @@ components:
     MethodNotAllowedReading:
       description: METHOD_NOT_ALLOWED. Readings are append-only; Allow is GET, HEAD. Answered without touching the database.
       headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
         Allow: { $ref: '#/components/headers/AllowReading' }
       content:
         application/json:
@@ -1366,6 +1572,8 @@ components:
     MethodNotAllowedSummary:
       description: METHOD_NOT_ALLOWED. A generation summary is worked out on request and is read-only; Allow is GET, HEAD.
       headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
         Allow: { $ref: '#/components/headers/AllowReading' }
       content:
         application/json:
@@ -1374,6 +1582,8 @@ components:
     MethodNotAllowedCollection:
       description: METHOD_NOT_ALLOWED. A reading history is never replaced or erased; Allow is GET, HEAD, POST.
       headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
         Allow: { $ref: '#/components/headers/AllowReadings' }
       content:
         application/json:
@@ -1381,6 +1591,9 @@ components:
           example: { code: METHOD_NOT_ALLOWED, message: 'Readings are append-only: DELETE is not allowed here. Allowed: GET, HEAD, POST.', details: [], more_info: /api-docs#error-codes }
     ServiceUnavailable:
       description: The database cannot be reached (SERVICE_UNAVAILABLE)
+      headers:
+        Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+        Vary: { $ref: '#/components/headers/VaryScoped' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1393,14 +1606,14 @@ components:
       required: [email, password]
       properties:
         email: { type: string, format: email, example: colombo.analyst@slsea.lk }
-        password: { type: string, format: password, minLength: 1, description: At most 72 bytes }
+        password: { type: string, format: password, minLength: 1, description: At most 72 bytes, example: '<the account password>' }
     DeviceCredentials:
       type: object
       additionalProperties: false
       required: [meter_id, device_secret]
       properties:
         meter_id: { type: string, pattern: '^MTR-[0-9]{6}$', example: MTR-000001 }
-        device_secret: { type: string, format: password, minLength: 1, description: At most 72 bytes }
+        device_secret: { type: string, format: password, minLength: 1, description: At most 72 bytes, example: '<the meter device secret>' }
     TokenResponse:
       type: object
       required: [access_token, token_type, expires_in, scope]
