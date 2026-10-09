@@ -21,6 +21,9 @@ info:
     both honouring `If-Match` (a stale ETag → 412).
     `/installations` and the readings history are paginated and sortable; installations filter by
     jurisdiction and `status`, readings by time window and `min-power-kw`.
+    `GET /districts/{district-id}/generation-summary` and `GET /provinces/{province-id}/generation-summary`
+    (current power, a day's energy and peak, installed capacity and utilisation, installation counts;
+    for today or `?date=` in Sri Lanka time; ETag only).
     Conditional GET on every resource: a strong `ETag`, `Cache-Control: private, no-cache` and
     `Vary: Accept, Authorization` on each successful GET; `If-None-Match` (which wins) matching the
     current version → 304 with an empty body. Single resources also send `Last-Modified` and honour
@@ -28,11 +31,37 @@ info:
     (a DELETE, or a PUT moving it out of a filter) no remaining member changes, so no date would
     advance. They are revalidated by `ETag` only, which changes whenever the body does.
 
-    **Documented here but not live yet** (operations marked *(planned)*, plus):
-    - Authentication: every route is currently public, including reading ingestion and the
-      registry (temporary placeholders let every request through); 401 and 403 arrive with the
-      security phase.
-    - The generation summaries.
+    Tokens: `POST /auth/tokens` with `email` + `password` or `meter_id` + `device_secret` (201 with a
+    signed bearer token; 401 for wrong credentials; 403 for an inactive user or installation).
+
+    Authentication: every route under `/provinces`, `/districts`, `/grid-substations` and
+    `/installations` needs `Authorization: Bearer <token>`. A missing token is 401
+    `AUTHENTICATION_REQUIRED`; an invalid one (signature, issuer, audience, algorithm, missing `exp`)
+    is 401 `INVALID_TOKEN`; an expired one is 401 `TOKEN_EXPIRED` (30 s clock tolerance). Every 401
+    carries `WWW-Authenticate: Bearer realm="slsea-solar-api"`, with `error="invalid_token"` when a token
+    was sent but refused. 401 comes before 404, 405 and 406.
+
+    Scopes (403 `INSUFFICIENT_SCOPE`, with `WWW-Authenticate: ... error="insufficient_scope", scope="..."`):
+    every GET needs `analyst-read-by-jurisdiction` (a meter's token reads nothing); posting a reading
+    needs `installation-write`; registering, replacing and deleting installations need `asset-admin`.
+    A meter's token posting to another installation is 403 `INSTALLATION_MISMATCH`. Scope checks come
+    after 401 and 405 and before 404, 412, 415 and 400.
+
+    Jurisdiction: every read is cut to the caller's jurisdiction (national, one province or one
+    district) inside the database query. Collections with no filter return only the caller's own
+    area; a district user sees no whole province. A filter that overlaps the caller's area is applied
+    (a district user may filter by their own province); one outside it is 403 `OUTSIDE_JURISDICTION`,
+    never an empty list. A filter id that does not exist matches nothing (200, empty). A member outside
+    the jurisdiction is 403 after the 404 check, including the composite, last-known reading, readings
+    and both summaries.
+
+    Hardening: `POST /auth/tokens` allows 10 failed attempts per client address per 15 minutes
+    (successful sign-ins don't count), then 429 `TOO_MANY_REQUESTS` with `Retry-After`. Any key
+    containing `$` or `.` in a JSON body or query string is 400 `VALIDATION_FAILED` (NoSQL-injection
+    guard). Security headers on every response (no `X-Powered-By`, `nosniff`, HSTS, a strict
+    Content-Security-Policy). CORS only for browser origins listed by the operator (none by default).
+    Every response under the guarded paths has `Cache-Control: private, no-cache` (errors `no-store`)
+    and `Vary: Accept, Authorization`.
 
     Every response is `application/json`. Every error uses the `Error` schema, carries no `ETag`
     or `Last-Modified`, and is sent with `Cache-Control: no-store`.
@@ -73,6 +102,8 @@ tags:
     description: Append-only generation readings of one installation
   - name: Summaries
     description: Derived generation figures across a district or province
+  - name: Auth
+    description: Bearer tokens for devices, SLSEA users and the registry admin
 
 paths:
   /health:
@@ -99,6 +130,60 @@ paths:
                 message: The database cannot be reached.
                 details: []
                 more_info: /api-docs#error-codes
+
+  /auth/tokens:
+    post:
+      tags: [Auth]
+      operationId: createToken
+      summary: Exchange credentials for a bearer token
+      description: |
+        Send exactly one credential pair: `email` + `password` (SLSEA user or registry admin) or
+        `meter_id` + `device_secret` (a meter). A body that mixes the two pairs is 400. A successful call creates a new token, so it is 201,
+        and two identical calls give two different tokens.
+
+        | Client | `scope` | Lifetime |
+        |---|---|---|
+        | Meter | `installation-write` (bound to its installation, the token's `sub`) | 24 h |
+        | SLSEA user | `analyst-read-by-jurisdiction` (the token carries the user's jurisdiction) | 1 h |
+        | Registry admin | `asset-admin analyst-read-by-jurisdiction` | 15 min |
+
+        The token is not stored and cannot be fetched again, so there is no `Location`, and the
+        response is `Cache-Control: no-store`. Unknown accounts and wrong passwords give the same 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/UserCredentials'
+                - $ref: '#/components/schemas/DeviceCredentials'
+      responses:
+        '201':
+          description: A new token
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: INVALID_CREDENTIALS. Unknown email or meter, or wrong password or secret (one message for all).
+          headers:
+            WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: INVALID_CREDENTIALS, message: The credentials are not valid., details: [], more_info: /api-docs#error-codes }
+        '403':
+          description: ACCOUNT_INACTIVE. Correct credentials, but the user or installation is inactive. A meter of an installation registered through the API has no secret yet and gets 401.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '406': { $ref: '#/components/responses/NotAcceptable' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /provinces:
     get:
@@ -160,7 +245,7 @@ paths:
     get:
       tags: [Summaries]
       operationId: getProvinceGenerationSummary
-      summary: (planned) Current total power and a day's energy across a province
+      summary: Current total power and a day's energy across a province
       parameters:
         - $ref: '#/components/parameters/Date'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -170,7 +255,6 @@ paths:
           description: The province summary
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -182,6 +266,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Summaries]
+      operationId: postProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    put:
+      tags: [Summaries]
+      operationId: putProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    patch:
+      tags: [Summaries]
+      operationId: patchProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    delete:
+      tags: [Summaries]
+      operationId: deleteProvinceGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
   /districts:
     get:
@@ -245,7 +358,7 @@ paths:
     get:
       tags: [Summaries]
       operationId: getDistrictGenerationSummary
-      summary: (planned) Current total power and a day's energy across a district
+      summary: Current total power and a day's energy across a district
       parameters:
         - $ref: '#/components/parameters/Date'
         - $ref: '#/components/parameters/IfNoneMatch'
@@ -255,7 +368,6 @@ paths:
           description: The district summary
           headers:
             ETag: { $ref: '#/components/headers/ETag' }
-            Last-Modified: { $ref: '#/components/headers/LastModified' }
             Vary: { $ref: '#/components/headers/Vary' }
             Cache-Control: { $ref: '#/components/headers/CacheControl' }
           content:
@@ -267,6 +379,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '406': { $ref: '#/components/responses/NotAcceptable' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    post:
+      tags: [Summaries]
+      operationId: postDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    put:
+      tags: [Summaries]
+      operationId: putDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    patch:
+      tags: [Summaries]
+      operationId: patchDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
+    delete:
+      tags: [Summaries]
+      operationId: deleteDistrictGenerationSummaryNotAllowed
+      summary: Not allowed. A generation summary is read-only (405)
+      security: []
+      responses:
+        '405': { $ref: '#/components/responses/MethodNotAllowedSummary' }
 
   /grid-substations:
     get:
@@ -978,7 +1119,7 @@ components:
     Date:
       name: date
       in: query
-      description: Sri Lanka calendar day (Asia/Colombo) to summarise. Defaults to today.
+      description: Sri Lanka calendar day (Asia/Colombo) to summarise, YYYY-MM-DD. Defaults to today. An impossible date, another format or a day after today → 400 INVALID_QUERY_PARAMETER.
       schema: { type: string, format: date, example: '2026-10-06' }
     IfNoneMatch:
       name: If-None-Match
@@ -997,6 +1138,12 @@ components:
       schema: { type: string, example: '"a3f9c2d1"' }
 
   headers:
+    CacheControlNoStore:
+      description: Never stored by any cache
+      schema: { type: string, example: no-store }
+    RetryAfter:
+      description: Seconds to wait before trying again
+      schema: { type: integer, example: 60 }
     ETag:
       description: Strong validator, a quoted hash of the response body
       schema: { type: string, example: '"a3f9c2d1"' }
@@ -1036,6 +1183,13 @@ components:
       description: Missing, invalid or expired token
       headers:
         WWW-Authenticate: { $ref: '#/components/headers/WWWAuthenticate' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: TOO_MANY_REQUESTS. Too many token requests from this client; wait for Retry-After seconds.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1123,6 +1277,14 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: METHOD_NOT_ALLOWED, message: 'Readings are append-only: DELETE is not allowed here. Allowed: GET, HEAD.', details: [], more_info: /api-docs#error-codes }
+    MethodNotAllowedSummary:
+      description: METHOD_NOT_ALLOWED. A generation summary is worked out on request and is read-only; Allow is GET, HEAD.
+      headers:
+        Allow: { $ref: '#/components/headers/AllowReading' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: METHOD_NOT_ALLOWED, message: 'A generation summary is read-only: POST is not allowed here. Allowed: GET, HEAD.', details: [], more_info: /api-docs#error-codes }
     MethodNotAllowedCollection:
       description: METHOD_NOT_ALLOWED. A reading history is never replaced or erased; Allow is GET, HEAD, POST.
       headers:
@@ -1139,6 +1301,29 @@ components:
           example: { code: SERVICE_UNAVAILABLE, message: The database cannot be reached., details: [], more_info: /api-docs#error-codes }
 
   schemas:
+    UserCredentials:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: colombo.analyst@slsea.lk }
+        password: { type: string, format: password, minLength: 1, description: At most 72 bytes }
+    DeviceCredentials:
+      type: object
+      additionalProperties: false
+      required: [meter_id, device_secret]
+      properties:
+        meter_id: { type: string, pattern: '^MTR-[0-9]{6}$', example: MTR-000001 }
+        device_secret: { type: string, format: password, minLength: 1, description: At most 72 bytes }
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token: { type: string, description: 'Signed JWT (HS256). Claims: iss slsea-solar-api/auth, aud slsea-solar-api, sub (USR-… or INS-…), scope, jurisdiction (users only), iat, exp, jti', example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.signature }
+        token_type: { type: string, enum: [Bearer], example: Bearer }
+        expires_in: { type: integer, description: Seconds until the token expires, example: 3600 }
+        scope: { type: string, description: Space-separated scopes, example: analyst-read-by-jurisdiction }
+
     Health:
       type: object
       required: [status, database]
@@ -1277,23 +1462,36 @@ components:
 
     DistrictGenerationSummary:
       type: object
-      required: [district_id, date, total_power_kw, power_as_of, day_energy_kwh]
+      required: [district_id, date, total_power_kw, power_as_of, day_energy_kwh, peak_power_kw, peak_at, installed_capacity_kw, capacity_utilisation, installation_count, reporting_installations]
       properties:
         district_id: { type: string, example: DT-01 }
-        date: { type: string, format: date, description: Sri Lanka calendar day, example: '2026-10-06' }
-        total_power_kw: { type: number, description: Sum of each installation's latest power_kw, example: 41.73 }
-        power_as_of: { type: string, format: date-time, nullable: true, description: Newest reading included in total_power_kw, example: '2026-10-06T04:30:00Z' }
-        day_energy_kwh: { type: number, description: 'Energy generated on date, from the cumulative energy_kwh', example: 182.4 }
+        date: { type: string, format: date, description: 'Sri Lanka calendar day summarised: [date 00:00 +05:30, next day 00:00 +05:30)', example: '2026-10-06' }
+        total_power_kw: { type: number, description: 'Sum of the latest power_kw in the day of every installation that reported that day (3 dp). For today, current power; for a past date, power at the end of that day', example: 41.73 }
+        power_as_of: { type: string, format: date-time, nullable: true, description: Newest timestamp among the readings in total_power_kw; null when no installation reported that day, example: '2026-10-06T04:30:00Z' }
+        day_energy_kwh: { type: number, description: "Sum of the increases in cumulative energy_kwh for every reading in the day, each compared with the installation's previous reading (from before the day if needed). A drop (meter reset or replacement) counts as 0, never negative. 3 dp", example: 182.4 }
+        peak_power_kw: { type: number, description: 'Highest combined power_kw in one 15-minute slot of the day (one value per installation per slot), 3 dp; 0 when nothing reported', example: 58.2 }
+        peak_at: { type: string, format: date-time, nullable: true, description: 'Start of that slot; the earliest on a tie; null when nothing was generated (peak_power_kw 0)', example: '2026-10-06T06:30:00.000Z' }
+        installed_capacity_kw: { type: number, description: 'Sum of capacity_kw of every registered installation (active or inactive), from the registry as it is now', example: 96 }
+        capacity_utilisation: { type: number, nullable: true, description: 'total_power_kw ÷ installed_capacity_kw, 3 dp (0.15 = 15%). Can slightly exceed 1. null when there are no installations', example: 0.435 }
+        installation_count: { type: integer, description: Registered installations, example: 22 }
+        reporting_installations: { type: integer, description: Installations with at least one reading in the day, example: 20 }
 
     ProvinceGenerationSummary:
       type: object
-      required: [province_id, date, total_power_kw, power_as_of, day_energy_kwh]
+      description: The district summary one level up, from the same calculation; every field means the same.
+      required: [province_id, date, total_power_kw, power_as_of, day_energy_kwh, peak_power_kw, peak_at, installed_capacity_kw, capacity_utilisation, installation_count, reporting_installations]
       properties:
         province_id: { type: string, example: PV-01 }
         date: { type: string, format: date, example: '2026-10-06' }
         total_power_kw: { type: number, example: 312.5 }
         power_as_of: { type: string, format: date-time, nullable: true, example: '2026-10-06T04:30:00Z' }
         day_energy_kwh: { type: number, example: 1410.2 }
+        peak_power_kw: { type: number, example: 402.7 }
+        peak_at: { type: string, format: date-time, nullable: true, example: '2026-10-06T06:30:00.000Z' }
+        installed_capacity_kw: { type: number, example: 640 }
+        capacity_utilisation: { type: number, nullable: true, example: 0.488 }
+        installation_count: { type: integer, example: 95 }
+        reporting_installations: { type: integer, example: 93 }
 
     ErrorDetail:
       type: object

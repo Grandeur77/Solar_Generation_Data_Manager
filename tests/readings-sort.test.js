@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const app = require('../src/app');
 const { setUpTestDatabase, tearDownTestDatabase } = require('./helpers/test-db');
 const { expectErrorBody } = require('./helpers/expect-error');

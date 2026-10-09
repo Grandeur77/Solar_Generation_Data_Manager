@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const app = require('../src/app');
 const Province = require('../src/models/province');
 const District = require('../src/models/district');

@@ -1,4 +1,4 @@
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const mongoose = require('mongoose');
 const app = require('../src/app');
 const { testDatabaseUri } = require('./helpers/test-db');

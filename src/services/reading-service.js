@@ -4,15 +4,17 @@ const GenerationReading = require('../models/generation-reading');
 // not by insertion order, so a late-arriving older reading never replaces it.
 // The unique { installation_id, timestamp: -1 } index answers this without scanning the history.
 // Returns null when the installation has no readings yet.
-async function getLastReading(installationId) {
-  return GenerationReading.findOne({ installation_id: installationId }).sort({ timestamp: -1 });
+// scope is the caller's jurisdiction filter (jurisdictionFilter), merged into the query; there
+// is no default, so no caller can forget it and silently read everything.
+async function getLastReading(installationId, scope) {
+  return GenerationReading.findOne({ ...scope, installation_id: installationId }).sort({ timestamp: -1 });
 }
 
 // One page of an installation's history, newest first, plus the total across all pages.
 // Every query names the installation, so a reading can only be reached through its own
 // installation (the scope). Both queries use the { installation_id, timestamp } index.
-async function listReadings(installationId, { skip, limit, timestamp, minPowerKw, sort = { timestamp: -1 } }) {
-  const filter = { installation_id: installationId };
+async function listReadings(installationId, { skip, limit, timestamp, minPowerKw, sort = { timestamp: -1 }, scope }) {
+  const filter = { ...scope, installation_id: installationId };
   // The time window filters on measurement time (timestamp), not on when the server received it.
   if (timestamp) filter.timestamp = timestamp;
   if (minPowerKw !== undefined) filter.power_kw = { $gte: minPowerKw };
@@ -24,8 +26,8 @@ async function listReadings(installationId, { skip, limit, timestamp, minPowerKw
 }
 
 // Matches on both ids: a real reading id under the wrong installation is not found.
-async function findReading(installationId, readingId) {
-  return GenerationReading.findOne({ _id: readingId, installation_id: installationId });
+async function findReading(installationId, readingId, scope) {
+  return GenerationReading.findOne({ ...scope, _id: readingId, installation_id: installationId });
 }
 
 // The reading an installation already has at an exact instant (used to point a duplicate at it).
@@ -47,4 +49,9 @@ async function insertReading(data) {
   return GenerationReading.create(data);
 }
 
-module.exports = { getLastReading, listReadings, findReading, findReadingAt, findNeighbours, insertReading };
+// Only used to take back a reading this request has just stored (see createReading).
+async function removeReading(readingId) {
+  return GenerationReading.deleteOne({ _id: readingId });
+}
+
+module.exports = { getLastReading, listReadings, findReading, findReadingAt, findNeighbours, insertReading, removeReading };

@@ -1,4 +1,6 @@
 const { ApiError } = require('./errors');
+const { parseInstant } = require('./iso-time');
+const { sriLankaToday } = require('./sri-lanka-day');
 
 // Query readers collect problems instead of throwing, so one 400 lists every bad value at once.
 const detail = (field, issue) => ({ field, location: 'query', issue, reference: null });
@@ -37,10 +39,36 @@ function readNumberParam(query, name, min, problems) {
   return Number(value);
 }
 
+// An optional calendar day, e.g. ?date=2026-10-06: exactly YYYY-MM-DD, a day that exists
+// (parseInstant rejects 30 February), and not after latest (also YYYY-MM-DD, so plain
+// string comparison orders them correctly).
+function readDateParam(query, name, latest, problems) {
+  const value = query[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !parseInstant(`${value}T00:00:00Z`)) {
+    problems.push(detail(name, 'Must be a real calendar day as YYYY-MM-DD, given once.'));
+    return undefined;
+  }
+  if (value > latest) {
+    problems.push(detail(name, `Must not be after today in Sri Lanka (${latest}).`));
+    return undefined;
+  }
+  return value;
+}
+
+// ?date= for the generation summaries: today in Sri Lanka when absent, 400 when invalid.
+function readSummaryDate(query) {
+  const today = sriLankaToday();
+  const problems = [];
+  const date = readDateParam(query, 'date', today, problems);
+  throwIfInvalid(problems);
+  return date || today;
+}
+
 function throwIfInvalid(problems) {
   if (problems.length > 0) {
     throw new ApiError(400, 'INVALID_QUERY_PARAMETER', 'One or more query parameters are invalid.', problems);
   }
 }
 
-module.exports = { readIdParam, readEnumParam, readNumberParam, throwIfInvalid };
+module.exports = { readIdParam, readEnumParam, readNumberParam, readDateParam, readSummaryDate, throwIfInvalid };

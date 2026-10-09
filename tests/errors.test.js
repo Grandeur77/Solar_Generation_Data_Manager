@@ -1,5 +1,5 @@
 const express = require('express');
-const request = require('supertest');
+const request = require('./helpers/authed-request');
 const app = require('../src/app');
 const { notFound, ApiError } = require('../src/utils/errors');
 const { acceptJson } = require('../src/middleware/accept-json');
